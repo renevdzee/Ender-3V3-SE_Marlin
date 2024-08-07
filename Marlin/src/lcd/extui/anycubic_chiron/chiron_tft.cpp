@@ -822,7 +822,7 @@ void ChironTFT::PanelProcess(uint8_t req) {
 
       if (FindToken('C') != -1) { // Restore and apply original offsets
         if (!isPrinting()) {
-          injectCommands_P(PSTR("M501\nM420 S1"));
+          injectCommands_P(PSTR("M501\nM420 S1 Z10"));
           selectedmeshpoint.x = selectedmeshpoint.y = 99;
           SERIAL_ECHOLNPGM_P(AC_msg_mesh_changes_abandoned);
         }
@@ -918,7 +918,7 @@ void ChironTFT::PanelProcess(uint8_t req) {
 
     case 34: {  // A34 Adjust single mesh point A34 C/S X1 Y1 V123
       if (panel_command[3] == 'C') { // Restore original offsets
-        injectCommands_P(PSTR("M501\nM420 S1"));
+        injectCommands_P(PSTR("M501\nM420 S1 Z10"));
         selectedmeshpoint.x = selectedmeshpoint.y = 99;
         //printer_state = AC_printer_idle;
       }

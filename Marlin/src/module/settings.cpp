@@ -54,6 +54,7 @@
 #include "../libs/vector_3.h"   // for matrix_3x3
 #include "../gcode/gcode.h"
 #include "../MarlinCore.h"
+#include "../lcd/dwin/e3v2/dwin.h"
 
 #if EITHER(EEPROM_SETTINGS, SD_FIRMWARE_UPDATE)
   #include "../HAL/shared/eeprom_api.h"
@@ -479,9 +480,23 @@ typedef struct SettingsDataStruct {
   #if HAS_MULTI_LANGUAGE
     uint8_t ui_language;                                // M414 S
   #endif
+    //
+  // Input Shaping
+  //
+  #if ENABLED(INPUT_SHAPING_X)
+    float shaping_x_frequency, // M593 X F
+          shaping_x_zeta;      // M593 X D
+  #endif
+  #if ENABLED(INPUT_SHAPING_Y)
+    float shaping_y_frequency, // M593 Y F
+          shaping_y_zeta;      // M593 Y D
+  #endif
 
+//  uint16_t Auto_PID_Value_set1;
+//  uint16_t Auto_PID_Value_set2;
+//  uint16_t Auto_PID_Value_set[3];
 } SettingsData;
-
+uint16_t Auto_PID_Value_set[3];
 //static_assert(sizeof(SettingsData) <= MARLIN_EEPROM_SIZE, "EEPROM too small to contain SettingsData!");
 
 MarlinSettings settings;
@@ -802,7 +817,11 @@ void MarlinSettings::postprocess() {
     //
     {
       _FIELD_TEST(planner_leveling_active);
-      const bool ubl_active = TERN(AUTO_BED_LEVELING_UBL, planner.leveling_active, false);
+      #if ENABLED(AUTO_BED_LEVELING_BILINEAR)
+        const bool ubl_active = planner.leveling_active;
+      #else
+        const bool ubl_active = TERN(AUTO_BED_LEVELING_UBL, planner.leveling_active, false);
+      #endif
       const int8_t storage_slot = TERN(AUTO_BED_LEVELING_UBL, ubl.storage_slot, -1);
       EEPROM_WRITE(ubl_active);
       EEPROM_WRITE(storage_slot);
@@ -1439,6 +1458,24 @@ void MarlinSettings::postprocess() {
       EEPROM_WRITE(ui.language);
     #endif
 
+       //
+    // Input Shaping
+    ///
+    #if HAS_SHAPING
+      #if ENABLED(INPUT_SHAPING_X)
+        EEPROM_WRITE(stepper.get_shaping_frequency(X_AXIS));
+        EEPROM_WRITE(stepper.get_shaping_damping_ratio(X_AXIS));
+      #endif
+      #if ENABLED(INPUT_SHAPING_Y)
+        EEPROM_WRITE(stepper.get_shaping_frequency(Y_AXIS));
+        EEPROM_WRITE(stepper.get_shaping_damping_ratio(Y_AXIS));
+      #endif
+    #endif
+
+    // Auto_PID_Value_set[1]=HMI_ValueStruct.Auto_PID_Value[1];
+    // Auto_PID_Value_set[2]=HMI_ValueStruct.Auto_PID_Value[2];
+    // EEPROM_WRITE(Auto_PID_Value_set[1]);
+    // EEPROM_WRITE(Auto_PID_Value_set[2]);
     //
     // Report final CRC and Data Size
     //
@@ -1680,6 +1717,9 @@ void MarlinSettings::postprocess() {
         #if ENABLED(AUTO_BED_LEVELING_UBL)
           const bool &planner_leveling_active = planner.leveling_active;
           const int8_t &ubl_storage_slot = ubl.storage_slot;
+        #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)
+          const bool &planner_leveling_active = planner.leveling_active;
+          int8_t ubl_storage_slot;
         #else
           bool planner_leveling_active;
           int8_t ubl_storage_slot;
@@ -2357,6 +2397,34 @@ void MarlinSettings::postprocess() {
       }
       #endif
 
+      
+      //
+      // Input Shaping
+      //
+      #if ENABLED(INPUT_SHAPING_X)
+      {
+        float _data[2];
+        EEPROM_READ(_data);
+        stepper.set_shaping_frequency(X_AXIS, _data[0]);
+        stepper.set_shaping_damping_ratio(X_AXIS, _data[1]);
+      }
+      #endif
+
+      #if ENABLED(INPUT_SHAPING_Y)
+      {
+        float _data[2];
+        EEPROM_READ(_data);
+        stepper.set_shaping_frequency(Y_AXIS, _data[0]);
+        stepper.set_shaping_damping_ratio(Y_AXIS, _data[1]);
+      }
+      #endif
+
+      //  EEPROM_READ(Auto_PID_Value_set[1]);
+      //  if(!Auto_PID_Value_set[1])Auto_PID_Value_set[1]=100;
+      //  HMI_ValueStruct.Auto_PID_Value[1]=Auto_PID_Value_set[1];
+      //  EEPROM_READ(Auto_PID_Value_set[2]);
+      //  if(!Auto_PID_Value_set[2])Auto_PID_Value_set[2]=260;
+      //  HMI_ValueStruct.Auto_PID_Value[2]=Auto_PID_Value_set[2];
       //
       // Validate Final Size and CRC
       //
@@ -2701,6 +2769,9 @@ void MarlinSettings::reset() {
   TERN_(ENABLE_LEVELING_FADE_HEIGHT, new_z_fade_height = (DEFAULT_LEVELING_FADE_HEIGHT));
   TERN_(HAS_LEVELING, reset_bed_level());
 
+  #if HAS_LEVELING
+    set_bed_leveling_enabled(true);
+  #endif
   #if HAS_BED_PROBE
     constexpr float dpo[] = NOZZLE_TO_PROBE_OFFSET;
     static_assert(COUNT(dpo) == 3, "NOZZLE_TO_PROBE_OFFSET must contain offsets for X, Y, and Z.");
@@ -2963,6 +3034,12 @@ void MarlinSettings::reset() {
     DEBUG_ECHOLNPGM("Digipot Written");
   #endif
 
+  // Restore the automatic PID temperature value to factory Settings
+  HMI_ValueStruct.Auto_PID_Value[1] = 100;
+  HMI_ValueStruct.Auto_PID_Value[2] = 260;
+  // Auto_PID_Value_set[1] = 100;
+  // Auto_PID_Value_set[2] = 260;
+
   //
   // CNC Coordinate System
   //
@@ -3002,6 +3079,20 @@ void MarlinSettings::reset() {
   // MKS UI controller
   //
   TERN_(DGUS_LCD_UI_MKS, MKS_reset_settings());
+
+  //
+  // Input Shaping
+  //
+  #if HAS_SHAPING
+    #if ENABLED(INPUT_SHAPING_X)
+      stepper.set_shaping_frequency(X_AXIS, SHAPING_FREQ_X);
+      stepper.set_shaping_damping_ratio(X_AXIS, SHAPING_ZETA_X);
+    #endif
+    #if ENABLED(INPUT_SHAPING_Y)
+      stepper.set_shaping_frequency(Y_AXIS, SHAPING_FREQ_Y);
+      stepper.set_shaping_damping_ratio(Y_AXIS, SHAPING_ZETA_Y);
+    #endif
+  #endif
 
   postprocess();
 
@@ -3830,6 +3921,12 @@ void MarlinSettings::reset() {
       #endif // HAS_STEALTHCHOP
 
     #endif // HAS_TRINAMIC_CONFIG
+
+   //
+    // Input Shaping
+    //
+    TERN_(HAS_SHAPING, gcode.M593_report(forReplay));
+
 
     /**
      * Linear Advance

@@ -264,6 +264,78 @@ void refresh_bed_level() {
   #define ABL_BG_GRID(X,Y)  z_values[X][Y]
 #endif
 
+#if ENABLED(CREALITY_LEVEL_COMPENSATION_ALGORITHM)
+//调平补偿算法
+/*
+  offset_value: 原来在双线性数组中的补偿值
+  raw_xy：      目标位置
+  ratio_xy：    在双线性区域的比例系数
+*/
+static float Level_Compensation_Algorithm(float offset_value,xy_pos_t &raw_xy,xy_pos_t &ratio_xy)
+{
+   int temp_y=ratio_xy.y,temp_x=ratio_xy.x;   //取整数
+    //如果斜率太大就取消补偿,防止补偿过大。
+    if((offset_value>LEVEL_ALGORITHM_MAX)|| (offset_value< LEVEL_ALGORITHM_MIN)) return offset_value;
+    if ((ratio_xy.y>=1.0)||(ratio_xy.x>=1.0))   //在边界外
+    {  
+      //  SERIAL_ECHOLNPAIR(" temp_x=: ",temp_x);
+      if(ratio_xy.y >= 1.0 && ratio_xy.x > 1.0) //右上 
+      {
+        #if ENABLED(ALGORITHM_INFO_PRINT)
+        SERIAL_ECHO_MSG("R-U");
+        #endif
+        if(offset_value>0.0)
+          offset_value=offset_value - (((ratio_xy.x + ratio_xy.y) )*offset_value*COMPEN_FACTOR_3);
+        else 
+          offset_value=offset_value + (((ratio_xy.x + ratio_xy.y) )*offset_value*COMPEN_FACTOR_3);
+      }
+      else if(ratio_xy.y <0.0 && ratio_xy.x >= 1.0) //右下
+      {
+        #if ENABLED(ALGORITHM_INFO_PRINT)
+         SERIAL_ECHO_MSG("R-D");
+         #endif
+        if(offset_value>0.0)
+          offset_value=offset_value - (((ratio_xy.x - ratio_xy.y))*offset_value*COMPEN_FACTOR_3);
+        else 
+          offset_value=offset_value + (((ratio_xy.x - ratio_xy.y)/2)*offset_value*COMPEN_FACTOR_3);
+      } 
+     else if(ratio_xy.y >=1.0 && ratio_xy.x < 0.0) //左上
+      {
+        #if ENABLED(ALGORITHM_INFO_PRINT)
+        SERIAL_ECHO_MSG("L-U");
+        #endif
+        if(offset_value>0.0)
+          offset_value=offset_value - (((ratio_xy.y - ratio_xy.x)/2)*offset_value*COMPEN_FACTOR_2);
+        else 
+          offset_value=offset_value + (((ratio_xy.y - ratio_xy.x)/2)*offset_value*COMPEN_FACTOR_5);
+      }
+      else if(ratio_xy.y >=1.0 && ratio_xy.x > 0.0) //左上
+      {
+        #if ENABLED(ALGORITHM_INFO_PRINT)
+        SERIAL_ECHO_MSG("U-line");
+        #endif
+        if(offset_value>0.0)
+          offset_value = offset_value - (((ratio_xy.x + ratio_xy.y))*offset_value*COMPEN_FACTOR_2);
+        else 
+          offset_value = offset_value + (((ratio_xy.x + ratio_xy.y)/2)*offset_value*COMPEN_FACTOR_3);
+      }
+      else //(ratio_xy.y >=1.0 && ratio_xy.x > 0.0)
+      {
+        #if ENABLED(ALGORITHM_INFO_PRINT)
+         SERIAL_ECHO_MSG("Line");
+         #endif
+        if(offset_value>0.0)
+          offset_value = offset_value - (((ratio_xy.x + ratio_xy.y))*offset_value*COMPEN_FACTOR_3);
+        else 
+          offset_value = offset_value + (((ratio_xy.x + ratio_xy.y)/2)*offset_value*COMPEN_FACTOR_5);
+      }
+    }
+    #if ENABLED(ALGORITHM_INFO_PRINT)
+    SERIAL_ECHOLNPAIR(" offset_value=: ",offset_value);
+    #endif
+    return offset_value;
+}
+#endif
 // Get the Z adjustment for non-linear bed leveling
 float bilinear_z_offset(const xy_pos_t &raw) {
 
@@ -332,20 +404,16 @@ float bilinear_z_offset(const xy_pos_t &raw) {
   }
 
   const float offset = L + ratio.x * D;   // the offset almost always changes
-
-  /*
-  static float last_offset = 0;
-  if (ABS(last_offset - offset) > 0.2) {
-    SERIAL_ECHOLNPAIR("Sudden Shift at x=", rel.x, " / ", bilinear_grid_spacing.x, " -> thisg.x=", thisg.x);
-    SERIAL_ECHOLNPAIR(" y=", rel.y, " / ", bilinear_grid_spacing.y, " -> thisg.y=", thisg.y);
-    SERIAL_ECHOLNPAIR(" ratio.x=", ratio.x, " ratio.y=", ratio.y);
-    SERIAL_ECHOLNPAIR(" z1=", z1, " z2=", z2, " z3=", z3, " z4=", z4);
-    SERIAL_ECHOLNPAIR(" L=", L, " R=", R, " offset=", offset);
-  }
-  last_offset = offset;
-  //*/
-
-  return offset;
+#if ENABLED(ALGORITHM_INFO_PRINT)
+  PRINT_LOG("ratio.x = ", ratio.x, "ratio.y =", ratio.y);
+  SERIAL_ECHOLNPAIR(" offset =: ",offset);
+#endif
+  #if ENABLED(CREALITY_LEVEL_COMPENSATION_ALGORITHM)
+    xy_pos_t temp_raw= raw;
+    return Level_Compensation_Algorithm(offset,temp_raw,ratio);
+  #else
+    return offset;
+  #endif
 }
 
 #if IS_CARTESIAN && DISABLED(SEGMENT_LEVELED_MOVES)

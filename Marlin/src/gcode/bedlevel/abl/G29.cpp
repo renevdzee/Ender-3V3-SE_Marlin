@@ -34,6 +34,7 @@
 #include "../../../module/planner.h"
 #include "../../../module/stepper.h"
 #include "../../../module/probe.h"
+#include "../../../module/temperature.h"
 #include "../../queue.h"
 
 #if ENABLED(PROBE_TEMP_COMPENSATION)
@@ -62,11 +63,14 @@
 
 #if ENABLED(DWIN_CREALITY_LCD)
   #include "../../../lcd/dwin/e3v2/dwin.h"
+   #include "../../../lcd/dwin/e3v2/ui_position.h"
 #endif
 
 #if HAS_MULTI_HOTEND
   #include "../../../module/tool_change.h"
 #endif
+
+#include "../../../module/settings.h"
 
 #if ABL_USES_GRID
   #if ENABLED(PROBE_Y_FIRST)
@@ -216,12 +220,41 @@ public:
  *     Include "E" to engage/disengage the Z probe for each sample.
  *     There's no extra effect if you have a fixed Z probe.
  */
-G29_TYPE GcodeSuite::G29() {
+
+G29_TYPE GcodeSuite::G29()
+{
   TERN_(PROBE_MANUALLY, static) G29_State abl;
 
   TERN_(FULL_REPORT_TO_HOST_FEATURE, set_and_report_grblstate(M_PROBE));
 
   reset_stepper_timeout();
+
+  G29_flag = true;
+  for(int x = 0; x < GRID_MAX_POINTS_X; x ++)
+  {
+    for(int y = 0; y < GRID_MAX_POINTS_Y; y ++)
+    {
+      z_values[x][y] = 0;
+    }
+  }
+
+  #if ENABLED(PROBING_HEATERS_OFF)
+    if(thermalManager.temp_hotend[0].target > 0)
+    {
+      temphot = thermalManager.temp_hotend[0].target;
+      thermalManager.setTargetHotend(0, 0);
+      // rtscheck.RTS_SndData(0, HEAD_SET_TEMP_VP);
+    }
+  #endif
+
+  #if ENABLED(PROBING_FANS_OFF)
+    afterprobe_fan0_speed = thermalManager.fan_speed[0];
+    if(thermalManager.fan_speed[0] > 0)
+    {
+      thermalManager.set_fan_speed(0, 0);
+      // rtscheck.RTS_SndData(0, PRINTER_FANOPEN_TITLE_VP);
+    }
+  #endif
 
   const bool seenQ = EITHER(DEBUG_LEVELING_FEATURE, PROBE_MANUALLY) && parser.seen_test('Q');
 
@@ -249,8 +282,16 @@ G29_TYPE GcodeSuite::G29() {
     process_subcommands_now_P(TERN(G28_L0_ENSURES_LEVELING_OFF, PSTR("G28L0"), G28_STR));
 
   // Don't allow auto-leveling without homing first
-  if (homing_needed_error()) G29_RETURN(false);
+  if (homing_needed_error())
+  {
+    // Fixed a bug where the leveling interface would not disappear when not connected to BLtouch
+    // rock_20211013 Solved the problem that the automatic leveling card does not exit to the main interface when there is no crtouch.
+    #if ENABLED(DWIN_CREALITY_LCD)
+      DWIN_CompletedLeveling();
+    #endif
 
+    G29_RETURN(false);
+  }
   #if ENABLED(AUTO_BED_LEVELING_3POINT)
     vector_3 points[3];
     probe.get_three_points(points);
@@ -263,8 +304,8 @@ G29_TYPE GcodeSuite::G29() {
   /**
    * On the initial G29 fetch command parameters.
    */
-  if (!g29_in_progress) {
-
+  if (!g29_in_progress)
+  {
     TERN_(HAS_MULTI_HOTEND, if (active_extruder) tool_change(0));
 
     #if EITHER(PROBE_MANUALLY, AUTO_BED_LEVELING_LINEAR)
@@ -606,9 +647,11 @@ G29_TYPE GcodeSuite::G29() {
       bool zig = PR_OUTER_SIZE & 1;  // Always end at RIGHT and BACK_PROBE_BED_POSITION
 
       abl.measured_z = 0;
-
       // Outer loop is X with PROBE_Y_FIRST enabled
       // Outer loop is Y with PROBE_Y_FIRST disabled
+      // xy_pos_t probe_position_lf,
+      //        probe_position_rb;    rock_20230703
+       
       for (PR_OUTER_VAR = 0; PR_OUTER_VAR < PR_OUTER_SIZE && !isnan(abl.measured_z); PR_OUTER_VAR++) {
 
         int8_t inStart, inStop, inInc;
@@ -632,7 +675,7 @@ G29_TYPE GcodeSuite::G29() {
         // Inner loop is Y with PROBE_Y_FIRST enabled
         // Inner loop is X with PROBE_Y_FIRST disabled
         for (PR_INNER_VAR = inStart; PR_INNER_VAR != inStop; pt_index++, PR_INNER_VAR += inInc) {
-
+          G29_level_num++;
           abl.probePos = abl.probe_position_lf + abl.gridSpacing * abl.meshCount.asFloat();
 
           TERN_(AUTO_BED_LEVELING_LINEAR, abl.indexIntoAB[abl.meshCount.x][abl.meshCount.y] = ++abl.abl_probe_index); // 0...
@@ -644,9 +687,11 @@ G29_TYPE GcodeSuite::G29() {
           TERN_(HAS_STATUS_MESSAGE, ui.status_printf_P(0, PSTR(S_FMT " %i/%i"), GET_TEXT(MSG_PROBING_MESH), int(pt_index), int(abl.abl_points)));
 
           abl.measured_z = faux ? 0.001f * random(-100, 101) : probe.probe_at_point(abl.probePos, raise_after, abl.verbose_level);
-
-          if (isnan(abl.measured_z)) {
+              
+          if (isnan(abl.measured_z)) {  
+            HMI_flag.G29_level_not_normal=true; //g29调平不正常          
             set_bed_leveling_enabled(abl.reenable);
+            Popup_Window_Leveling(); //清除调平界面
             break; // Breaks out of both loops
           }
 
@@ -671,12 +716,15 @@ G29_TYPE GcodeSuite::G29() {
             const float z = abl.measured_z + abl.Z_offset;
             z_values[abl.meshCount.x][abl.meshCount.y] = z;
             TERN_(EXTENSIBLE_UI, ExtUI::onMeshUpdate(abl.meshCount, z));
-
+            #if ENABLED(SHOW_GRID_VALUES)  //显示网格值 
+              // PRINT_LOG("abl.meshCount.x = ", abl.meshCount.x, " abl.meshCount.y = ", abl.meshCount.y, " z_values[mesh.x][mesh.y] = ", z_values[abl.meshCount.x][abl.meshCount.y]);  //����ǰֵ��ʾ����Ļ��Ӧ�ĵ�λ
+              if(HMI_flag.Need_boot_flag)Draw_Dots_On_Screen(&abl.meshCount,0,0); //开机引导
+              else Draw_Dots_On_Screen(&abl.meshCount,0,0);//非开机引导调平
+            #endif 
           #endif
-
           abl.reenable = false;
+          HMI_flag.G29_level_not_normal=false; //g29调平不正常
           idle_no_sleep();
-
         } // inner
       } // outer
 
@@ -892,11 +940,78 @@ G29_TYPE GcodeSuite::G29() {
     process_subcommands_now_P(PSTR(Z_PROBE_END_SCRIPT));
   #endif
 
+  settings.save();
+  // auto home
+  process_subcommands_now_P(PSTR("G28"));
+  process_subcommands_now_P("G1 Z10");  //调平完成之后上台到10mm
+
+ #if DISABLED(SHOW_GRID_VALUES)  //不显示网格值
   #if ENABLED(DWIN_CREALITY_LCD)
-    DWIN_CompletedLeveling();
+    DWIN_CompletedLeveling();  
   #endif
+#else
+     if(((GRID_MAX_POINTS_Y*GRID_MAX_POINTS_X)==G29_level_num)&&(!HMI_flag.G29_level_not_normal))
+     {
+       HMI_flag.G29_finish_flag=true; //如果16点的调平值都正常
+       G29_level_num=0;
+     }
+     else 
+     {
+        G29_level_num=0;
+        //HMI_flag.G29_finish_flag=false; //如果16点的调平值都正常
+     }
+     
+    if(HMI_flag.G29_finish_flag && !HMI_flag.Need_g29_flag && HMI_flag.local_leveling_flag)
+    {
+      if(HMI_flag.Need_boot_flag)//如果开机引导的调平
+      {
+        DWIN_ICON_Not_Filter_Show(HMI_flag.language, LANGUAGE_LEVELING_CONFIRM,BUTTON_BOOT_LEVEL_X, BUTTON_BOOT_LEVEL_Y);// 确认按钮
+        DWIN_Draw_Rectangle(0, Button_Select_Color, BUTTON_BOOT_LEVEL_X-1, BUTTON_BOOT_LEVEL_Y-1, BUTTON_BOOT_LEVEL_X+82, BUTTON_BOOT_LEVEL_Y+32);
+        DWIN_Draw_Rectangle(0, Button_Select_Color, BUTTON_BOOT_LEVEL_X-2, BUTTON_BOOT_LEVEL_Y-2, BUTTON_BOOT_LEVEL_X+83, BUTTON_BOOT_LEVEL_Y+33);
+        
+        checkkey=POPUP_CONFIRM;
+        //Save_Boot_Step_Value();//保存开机引导步骤
+      }
+      else 
+      {        
+        DWIN_ICON_Not_Filter_Show(HMI_flag.language, LANGUAGE_LEVELING_EDIT, BUTTON_EDIT_X, BUTTON_EDIT_Y);  //0x97   编辑按钮
+        DWIN_ICON_Not_Filter_Show(HMI_flag.language, LANGUAGE_LEVELING_CONFIRM,BUTTON_OK_X, BUTTON_OK_Y);// 确认按钮
+        Draw_Leveling_Highlight(0); //默认选择0
+      }
+      DWIN_ICON_Show(HMI_flag.language ,LANGUAGE_LEVEL_FINISH ,  WORD_TITLE_X, WORD_TITLE_Y);  //调平完成标题
+      HMI_flag.local_leveling_flag = false;
+    }
+#endif
 
   report_current_position();
+
+  #if ENABLED(PROBING_FANS_OFF)
+    if((afterprobe_fan0_speed > 0) && card.isPrinting())
+    {
+      thermalManager.set_fan_speed(0, afterprobe_fan0_speed);
+      // rtscheck.RTS_SndData(1, PRINTER_FANOPEN_TITLE_VP);
+    }
+  #endif
+
+  #if ENABLED(PROBING_HEATERS_OFF)
+    if(temphot > 0)
+    {
+      // rtscheck.RTS_SndData(temphot, HEAD_SET_TEMP_VP);
+      thermalManager.setTargetHotend(temphot, 0);
+
+      if(card.isPrinting())
+      {
+        if (temphot > (thermalManager.temp_hotend[0].celsius - 5))
+        {
+          thermalManager.wait_for_hotend(0);
+        }
+        while (ABS(thermalManager.degHotend(0) - thermalManager.degTargetHotend(0)) > TEMP_WINDOW)
+        {
+          idle();
+        }
+      }
+    }
+  #endif
 
   TERN_(FULL_REPORT_TO_HOST_FEATURE, set_and_report_grblstate(M_IDLE));
 

@@ -21,7 +21,7 @@
  */
 
 #include "../../inc/MarlinConfig.h"
-
+#include "../../lcd/dwin/e3v2/dwin.h"
 #if ENABLED(SDSUPPORT)
 
 #include "../gcode.h"
@@ -50,8 +50,8 @@
 /**
  * M24: Start or Resume SD Print
  */
-void GcodeSuite::M24() {
-
+void GcodeSuite::M24()
+{
   #if ENABLED(DGUS_LCD_UI_MKS)
     if ((print_job_timer.isPaused() || print_job_timer.isRunning()) && !parser.seen("ST"))
       MKS_resume_print_move();
@@ -83,6 +83,16 @@ void GcodeSuite::M24() {
   #endif
 
   ui.reset_status();
+  //rock_20211021 In the case of non-SD card printing, enter the M24 and enter the printing page
+  #if ENABLED(DWIN_CREALITY_LCD)
+    if(recovery.info.sd_printing_flag == false) 
+    {
+      // Update_Time_Value = 0;
+      print_job_timer.start();
+      // The print page is displayed.
+      Goto_PrintProcess();
+    }
+  #endif
 }
 
 /**
@@ -92,8 +102,17 @@ void GcodeSuite::M24() {
  *   Invoke M125 to store the current position and move to the park
  *   position. M24 will move the head back before resuming the print.
  */
-void GcodeSuite::M25() {
-
+void GcodeSuite::M25()
+{
+  // Determine whether to print online
+  if(!HMI_flag.remove_card_flag && !HMI_flag.pause_action && !HMI_flag.cutting_line_flag)
+  {
+    if(!HMI_flag.filement_resume_flag)
+    {
+      HMI_flag.online_pause_flag = true;
+      ICON_Continue();
+    }
+  }
   #if ENABLED(PARK_HEAD_ON_PAUSE)
 
     M125();
@@ -113,7 +132,8 @@ void GcodeSuite::M25() {
 
     TERN_(DGUS_LCD_UI_MKS, MKS_pause_print_move());
 
-    IF_DISABLED(DWIN_CREALITY_LCD, ui.reset_status());
+    // IF_DISABLED(DWIN_CREALITY_LCD, ui.reset_status());
+    TERN_(DWIN_CREALITY_LCD, ui.reset_status());
 
     #if ENABLED(HOST_ACTION_COMMANDS)
       TERN_(HOST_PROMPT_SUPPORT, host_prompt_open(PROMPT_PAUSE_RESUME, PSTR("Pause SD"), PSTR("Resume")));
@@ -121,7 +141,6 @@ void GcodeSuite::M25() {
         host_action_pause();
       #endif
     #endif
-
   #endif
 }
 

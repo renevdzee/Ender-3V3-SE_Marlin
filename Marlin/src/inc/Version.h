@@ -25,7 +25,11 @@
  * Release version. Leave the Marlin version or apply a custom scheme.
  */
 #ifndef SHORT_BUILD_VERSION
-  #define SHORT_BUILD_VERSION "2.0.8.2"
+  #if ENABLED(HIGH_SPEED_1)
+    #define SHORT_BUILD_VERSION "V1.0.6"
+  #else
+    #define SHORT_BUILD_VERSION "Ender-3V3 SE_Ten_P1T14T" // GD32F303RET6 + Multilanguage 1.Chinese 2.English 3.German 4.Russian 5.French 6.Turkish 7.Spanish 8.Italian 9.Portuguese
+  #endif  
 #endif
 
 /**
@@ -42,7 +46,7 @@
  * version was tagged.
  */
 #ifndef STRING_DISTRIBUTION_DATE
-  #define STRING_DISTRIBUTION_DATE "2021-05-29"
+  #define STRING_DISTRIBUTION_DATE "2022-11-28"
 #endif
 
 /**
@@ -73,7 +77,7 @@
  * Define a generic printer name to be output to the LCD after booting Marlin.
  */
 #ifndef MACHINE_NAME
-  #define MACHINE_NAME "3D Printer"
+  #define MACHINE_NAME "Ender-3V3 SE"
 #endif
 
 /**
@@ -97,7 +101,7 @@
    * documentation about a specific Marlin release. Displayed in the Info Menu.
    */
 #ifndef WEBSITE_URL
-  #define WEBSITE_URL "marlinfw.org"
+  #define WEBSITE_URL "www.creality.com"
 #endif
 
 /**
@@ -119,4 +123,5 @@
 #else
   #define  USB_DEVICE_PRODUCT_NAME        MACHINE_NAME
 #endif
+#define  USB_DEVICE_SERIAL_NAME           "123985739853"
 #define  USB_DEVICE_SERIAL_NAME           "123985739853"

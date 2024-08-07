@@ -1740,6 +1740,7 @@ float Planner::get_axis_position_mm(const AxisEnum axis) {
 void Planner::synchronize() {
   while (has_blocks_queued() || cleaning_buffer_counter
       || TERN0(EXTERNAL_CLOSED_LOOP_CONTROLLER, CLOSED_LOOP_WAITING())
+      || TERN0(HAS_SHAPING, stepper.input_shaping_busy()) // 2.1.x Planner::busy()
   ) idle();
 }
 

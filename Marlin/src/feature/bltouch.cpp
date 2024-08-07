@@ -32,7 +32,8 @@ bool BLTouch::last_written_mode; // Initialized by settings.load, 0 = Open Drain
 
 #include "../module/servo.h"
 #include "../module/probe.h"
-
+#include "../lcd/dwin/e3v2/dwin.h"
+#include "../MarlinCore.h"
 void stop();
 
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
@@ -111,7 +112,13 @@ bool BLTouch::deploy_proc() {
 
       SERIAL_ERROR_MSG(STR_STOP_BLTOUCH);  // Tell the user something is wrong, needs action
       stop();                              // but it's not too bad, no need to kill, allow restart
-
+      Popup_window_boot(CRTouch_err);  //CRTouch异常弹窗
+      // HMI_flag.cr_touch_error_flag=true; //CR_Touch错误标志位
+      while (1)
+      {
+        idle();        CR_Touch_error_func();
+        // if(!HMI_flag.cr_touch_error_flag && (!_stow_query_alarm()))return false;
+      }
       return true;                         // Tell our caller we goofed in case he cares to know
     }
   }
@@ -155,6 +162,11 @@ bool BLTouch::stow_proc() {
       SERIAL_ERROR_MSG(STR_STOP_BLTOUCH);  // Tell the user something is wrong, needs action
       stop();                              // but it's not too bad, no need to kill, allow restart
 
+      Popup_window_boot(CRTouch_err);  //CRTouch异常弹窗
+      while (1)
+      {
+        idle(); CR_Touch_error_func();       
+      }
       return true;                         // Tell our caller we goofed in case he cares to know
     }
   }

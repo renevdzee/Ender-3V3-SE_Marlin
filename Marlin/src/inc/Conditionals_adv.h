@@ -541,3 +541,15 @@
 #if EITHER(MEATPACK_ON_SERIAL_PORT_1, MEATPACK_ON_SERIAL_PORT_2)
   #define HAS_MEATPACK 1
 #endif
+
+
+// Input shaping
+// Marlin 2.0.8没有定义HAS_Y_AXIS
+// #if !HAS_Y_AXIS
+//   #undef INPUT_SHAPING_Y
+//   #undef SHAPING_FREQ_Y
+//   #undef SHAPING_BUFFER_Y
+// #endif
+#if EITHER(INPUT_SHAPING_X, INPUT_SHAPING_Y)
+   #define HAS_SHAPING 1
+#endif

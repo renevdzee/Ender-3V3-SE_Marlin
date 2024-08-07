@@ -36,7 +36,7 @@
 #include <SPI.h>
 
 enum StealthIndex : uint8_t { STEALTH_AXIS_XY, STEALTH_AXIS_Z, STEALTH_AXIS_E };
-#define TMC_INIT(ST, STEALTH_INDEX) tmc_init(stepper##ST, ST##_CURRENT, ST##_MICROSTEPS, ST##_HYBRID_THRESHOLD, stealthchop_by_axis[STEALTH_INDEX], chopper_timing_##ST, ST##_INTERPOLATE)
+#define TMC_INIT(ST, STEALTH_INDEX) tmc_init(stepper##ST, ST##_CURRENT, ST##_MICROSTEPS, ST##_HYBRID_THRESHOLD, stealthchop_by_axis[STEALTH_INDEX], chopper_timing_##ST, ST##_INTERPOLATE,ST##_HOLD_MULTIPLIER)
 
 //   IC = TMC model number
 //   ST = Stepper object letter
@@ -482,13 +482,14 @@ enum StealthIndex : uint8_t { STEALTH_AXIS_XY, STEALTH_AXIS_Z, STEALTH_AXIS_E };
   }
 #endif
 
-#if HAS_DRIVER(TMC2208)
+#if HAS_DRIVER(TMC2208)  //2208-2209配置
   template<char AXIS_LETTER, char DRIVER_ID, AxisEnum AXIS_ID>
-  void tmc_init(TMCMarlin<TMC2208Stepper, AXIS_LETTER, DRIVER_ID, AXIS_ID> &st, const uint16_t mA, const uint16_t microsteps, const uint32_t hyb_thrs, const bool stealth, const chopper_timing_t &chop_init, const bool interpolate) {
+  void tmc_init(TMCMarlin<TMC2208Stepper, AXIS_LETTER, DRIVER_ID, AXIS_ID> &st, const uint16_t mA, const uint16_t microsteps, const uint32_t hyb_thrs, const bool stealth, const chopper_timing_t &chop_init, const bool interpolate,float hold_current) {
     TMC2208_n::GCONF_t gconf{0};
     gconf.pdn_disable = true; // Use UART
-    gconf.mstep_reg_select = true; // Select microsteps with UART
     gconf.i_scale_analog = false;
+    gconf.mstep_reg_select = true; // Select microsteps with UART
+    
     gconf.en_spreadcycle = !stealth;
     st.GCONF(gconf.sr);
     st.stored.stealthChop_enabled = stealth;
@@ -502,7 +503,7 @@ enum StealthIndex : uint8_t { STEALTH_AXIS_XY, STEALTH_AXIS_Z, STEALTH_AXIS_E };
     TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
-    st.rms_current(mA, HOLD_MULTIPLIER);
+    st.rms_current(mA, hold_current);
     st.microsteps(microsteps);
     st.iholddelay(10);
     st.TPOWERDOWN(128); // ~2s until driver lowers to hold current
@@ -526,11 +527,12 @@ enum StealthIndex : uint8_t { STEALTH_AXIS_XY, STEALTH_AXIS_Z, STEALTH_AXIS_E };
 
 #if HAS_DRIVER(TMC2209)
   template<char AXIS_LETTER, char DRIVER_ID, AxisEnum AXIS_ID>
-  void tmc_init(TMCMarlin<TMC2209Stepper, AXIS_LETTER, DRIVER_ID, AXIS_ID> &st, const uint16_t mA, const uint16_t microsteps, const uint32_t hyb_thrs, const bool stealth, const chopper_timing_t &chop_init, const bool interpolate) {
+  void tmc_init(TMCMarlin<TMC2209Stepper, AXIS_LETTER, DRIVER_ID, AXIS_ID> &st, const uint16_t mA, const uint16_t microsteps, const uint32_t hyb_thrs, const bool stealth, const chopper_timing_t &chop_init, const bool interpolate,float hold_current) {
     TMC2208_n::GCONF_t gconf{0};
     gconf.pdn_disable = true; // Use UART
     gconf.mstep_reg_select = true; // Select microsteps with UART
     gconf.i_scale_analog = false;
+    // gconf.i_scale_analog = true; //内部参考电压
     gconf.en_spreadcycle = !stealth;
     st.GCONF(gconf.sr);
     st.stored.stealthChop_enabled = stealth;
@@ -544,7 +546,8 @@ enum StealthIndex : uint8_t { STEALTH_AXIS_XY, STEALTH_AXIS_Z, STEALTH_AXIS_E };
     TERN_(SQUARE_WAVE_STEPPING, chopconf.dedge = true);
     st.CHOPCONF(chopconf.sr);
 
-    st.rms_current(mA, HOLD_MULTIPLIER);
+    st.rms_current(mA, hold_current);
+    // st.rms_current(mA, HOLD_MULTIPLIER);
     st.microsteps(microsteps);
     st.iholddelay(10);
     st.TPOWERDOWN(128); // ~2s until driver lowers to hold current

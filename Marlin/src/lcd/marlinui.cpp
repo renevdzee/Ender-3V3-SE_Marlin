@@ -1183,9 +1183,22 @@ void MarlinUI::update() {
         #if ANY_BUTTON(EN1, EN2, ENC, BACK)
 
           uint8_t newbutton = 0;
-          if (BUTTON_PRESSED(EN1))                 newbutton |= EN_A;
-          if (BUTTON_PRESSED(EN2))                 newbutton |= EN_B;
-          if (can_encode() && BUTTON_PRESSED(ENC)) newbutton |= EN_C;
+          if (BUTTON_PRESSED(EN1))
+          {
+            newbutton |= EN_A;
+          }
+          if (BUTTON_PRESSED(EN2))
+          {
+            newbutton |= EN_B;
+          }
+          if (can_encode() && BUTTON_PRESSED(ENC))
+          {
+            delay(20);
+            if(BUTTON_PRESSED(ENC))
+            {
+              newbutton |= EN_C;
+            }
+          }
           if (BUTTON_PRESSED(BACK))                newbutton |= EN_D;
 
         #else
@@ -1451,7 +1464,7 @@ void MarlinUI::update() {
     #endif
 
     TERN_(EXTENSIBLE_UI, ExtUI::onStatusChanged(status_message));
-    TERN_(DWIN_CREALITY_LCD, DWIN_StatusChanged(status_message));
+    // TERN_(DWIN_CREALITY_LCD, DWIN_StatusChanged(status_message));
   }
 
   #if ENABLED(STATUS_MESSAGE_SCROLLING)

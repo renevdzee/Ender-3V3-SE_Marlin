@@ -39,6 +39,7 @@
 #include "../lcd/marlinui.h"
 
 #include "../MarlinCore.h" // for stop(), disable_e_steppers(), wait_for_user_response()
+#include "settings.h"
 
 #if HAS_LEVELING
   #include "../feature/bedlevel/bedlevel.h"
@@ -81,16 +82,384 @@
   #include "../lcd/extui/ui_api.h"
 #endif
 
+#if ENABLED(DWIN_CREALITY_LCD)
+  #include "../lcd/dwin/e3v2/dwin.h"
+#endif
+
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../core/debug_out.h"
 
 Probe probe;
 
-xyz_pos_t Probe::offset; // Initialized by settings.load()
+// Initialized by settings.load()
+xyz_pos_t Probe::offset;
 
 #if HAS_PROBE_XY_OFFSET
   const xy_pos_t &Probe::offset_xy = Probe::offset;
 #endif
+
+#if  ENABLED(USE_AUTOZ_TOOL)
+/**
+ * Nozzle clean, cross shaped
+ */
+void Probe::probe_clean_hotend(void)
+{
+  int i = 0;
+  char msg[64] = {0};
+  char cmd[16] = {0};
+  char cmd1[16] = {0};
+  char cmd2[16] = {0};
+
+  doG28ZProbe(false);
+
+  for(i = 0; i < 4; i++)
+  {
+    // Move quickly to the starting point
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s, Y%s, Z%s F3000", \
+             dtostrf(AUTOZ_BRUSH_X + AUTOZ_BRUSH_W, 1, 4, cmd), \
+             dtostrf(AUTOZ_BRUSH_Y, 1, 4, cmd1), \
+             dtostrf(AUTOZ_BRUSH_Z - 1, 1, 4, cmd2));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s, Y%s, Z%s F3000", \
+             dtostrf(AUTOZ_BRUSH_X - AUTOZ_BRUSH_W, 1, 4, cmd), \
+             dtostrf(AUTOZ_BRUSH_Y, 1, 4, cmd1), \
+             dtostrf(AUTOZ_BRUSH_Z - 1, 1, 4, cmd2));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+  }
+  for(i = 0; i < 4; i++)
+  {
+    // Move quickly to the starting point
+    // +0 It's due to structural limitations, +AUTOZ_BRUSH_H Will cause the structure to lose step
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s, Y%s, Z%s F3000", \
+             dtostrf(AUTOZ_BRUSH_X, 1, 4, cmd), \
+             dtostrf(AUTOZ_BRUSH_Y + 0, 1, 4, cmd1), \
+             dtostrf(AUTOZ_BRUSH_Z - 1, 1, 4, cmd2));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s, Y%s, Z%s F3000", \
+             dtostrf(AUTOZ_BRUSH_X, 1, 4, cmd), \
+             dtostrf(AUTOZ_BRUSH_Y - AUTOZ_BRUSH_H, 1, 4, cmd1), \
+             dtostrf(AUTOZ_BRUSH_Z - 1, 1, 4, cmd2));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+  }
+}
+
+/**
+ * Use the Touch automatic Z-compensation tool for height
+ * 
+ * @param x Touch coordinates during detection: X
+ * @param y Touch coordinates during detection: Y
+ * @param rdyZ Z compensation tool works before TouchZ axis
+ * @param minZ Z The lowest height that the compensation tool can fall while working
+ * @param tSpdMM_MIN Z Compensates for the speed at which the Touch moves while the tool is working
+ * @return Probe successful return to altitude
+ */
+float Probe::probe_at_point_by_crtouch(float x, float y, float rdyZ, float minZ, int tSpdMM_MIN)
+{
+  int i = 0;
+  int try_cnt = 0;
+
+  char msg[64] = {0};
+  char cmd[16] = {0};
+  char cmd1[16] = {0};
+  char cmd2[16] = {0};
+  uint32_t nowTickMs = millis();
+  uint32_t lastTickMs = millis();
+  float tvs[2] = {0};
+
+  planner.synchronize();
+
+  // Move quickly over the detection zone
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F1200 Z%s", dtostrf(rdyZ, 1, 4, cmd));
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s Y%s F1200", \
+           dtostrf(x, 1, 4, cmd), \
+           dtostrf(y, 1, 4, cmd1));
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  // Start detection: slow
+  for( i = 0; i < 2; i++ )
+  {
+    bltouch.deploy();
+    // If the Touch extension is abnormal, exit directly
+    if(bltouch.triggered())
+    {
+      TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM("LOGD:Touch Error"));
+      return -100;
+    }
+
+    // Drops to the lowest point until Touch triggers or times out
+    memset(msg, '\0', sizeof(msg));
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F%d Z%s", tSpdMM_MIN, dtostrf(minZ, 1, 4, cmd));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+
+    lastTickMs = millis();
+    do
+    {
+      watchdog_refresh();
+      if(bltouch.triggered())
+      {
+        quickstop_stepper();
+        tvs[i] = current_position.z;
+        // MARK: In the early stage of development, there was a hardware problem.
+        // The Touch often did not trigger, so it was considered to be triggered.
+        // In order to prevent damage to the Touch probe, it can be removed after the hardware is stable
+        bltouch.stow();
+        break;
+      }
+      nowTickMs = millis();
+    }while(nowTickMs - lastTickMs < 5000);
+    bltouch.stow();
+
+    if((i == 1) && ((abs(tvs[1] - tvs[0]) >= 0.2)))
+    {
+      i = -1;
+      tvs[0] = 0;
+      tvs[1] = 0;
+      ++ try_cnt;
+      if (try_cnt > 5)
+      {
+        TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM("LOGD:CrTouch too many mistakes."));
+        // Lift to a safe distance
+        snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 Z%s F1200", dtostrf(rdyZ, 1, 4, cmd));
+        gcode.process_subcommands_now_P(msg);
+        planner.synchronize();
+        return -100.0;
+      }
+    }
+
+    // Lift quickly to a safe distance
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 Z%s F1200", dtostrf(rdyZ, 1, 4, cmd));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+  }
+
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "LOGD:***CR-TOUCH tvs0=%s, tvs1=%s, tvsAvg=%s***", \
+           dtostrf(tvs[0], 1, 4, cmd), \
+           dtostrf(tvs[1], 1, 4, cmd1), \
+           dtostrf((tvs[0] + tvs[1]) / 2, 1, 4, cmd2));
+  TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM_P(msg));
+
+  return (tvs[0] + tvs[1]) / 2;
+}
+
+/**
+ * Use the automatic Z-compensation tool to sense the height of the automatic Z-compensation tool
+ * 
+ * @param x Nozzle coordinates during detection: X
+ * @param y Nozzle coordinates during detection: Y
+ * @param rdyZ Z compensation tool works before nozzle Z axis
+ * @param minZ Z The lowest height that the compensation tool can fall while working
+ * @param tSpdMM_MIN Z Compensates for the speed at which the nozzle moves while the tool is working
+ * @return Probe successful return to altitude
+ */
+float Probe::probe_at_point_by_sensor(float x, float y, float rdyZ, float minZ, int tSpdMM_MIN)
+{
+  return doG29Probe(x, y);
+}
+
+// old function probe at by sensor
+/*
+float Probe::probe_at_point_by_sensor(float x, float y, float rdyZ, float minZ, int tSpdMM_MIN)
+{
+  char msg[64] = {0};
+  char cmd[16] = {0};
+  char cmd1[16] = {0};
+  char cmd2[16] = {0};
+  uint32_t nowTickMs = 0;
+  uint32_t lastTickMs = millis();
+  float tvs[3] = {0.0};
+  int i = 0;
+  int try_cnt = 0;
+
+  planner.synchronize();
+
+  // Move over probe point: Fast
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F1200 Z%s", dtostrf(rdyZ, 1, 4, cmd));
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s Y%s F1200", \
+           dtostrf(x, 1, 4, cmd), \
+           dtostrf(y, 1, 4, cmd1));
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  for (i = 0; i < 3; i++)
+  {
+    lastTickMs = millis();
+    float OnceDistance = rdyZ;
+    do
+    {
+      // Slow to detect
+      memset(msg, '\0', sizeof(msg));
+      snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F%d Z%s", \
+               tSpdMM_MIN / (i == 0 ? 1 : 2), \
+               dtostrf((OnceDistance-=0.02), 1, 4, cmd));
+      TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+      gcode.process_subcommands_now_P(msg);
+
+      watchdog_refresh();
+      if ( 1 == AutoZToolGetStatus(&AutoZTool) )
+      {
+        quickstop_stepper();
+        tvs[i] = current_position.z;
+        TERN_(AUTOTOOL_RESULT, SERIAL_ECHOPGM("LOGD:***SENSOR, SUCCESS DOWN***\r\n"));
+        break;
+      }
+      snprintf(msg, sizeof(msg)/sizeof(msg[0]), "VAL:%s\r\n", dtostrf(AutoZTool.CurrentG, 1, 4, cmd));
+      TERN_(AUTOTOOL_PRINT_ADCVAL, SERIAL_ECHOLNPGM_P(msg));
+      nowTickMs = millis();
+    } while (nowTickMs - lastTickMs < 30000);
+
+    // Lift to a safe distance
+    snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 Z%s F600", dtostrf(rdyZ, 1, 4, cmd));
+    TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+    gcode.process_subcommands_now_P(msg);
+    planner.synchronize();
+  }
+
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "LOGD:Sener tvs1=%s tvs2=%s tvsAvg=%s", \
+           dtostrf(tvs[1], 1, 4, cmd), \
+           dtostrf(tvs[2], 1, 4, cmd1), \
+           dtostrf((tvs[1] + tvs[2]) / 2, 1, 4, cmd2));
+  TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM_P(msg));
+
+  return ((tvs[0] + tvs[1] + tvs[2]) / 3);
+}
+*/
+
+/**
+ * Automatically obtain z-axis offset value (height difference between nozzle and hot bed when Touch is triggered)
+ * 
+ */
+void Probe::auto_get_offset()
+{
+  // Pressure height needn't to heat the nozzle
+  float tarTmp = 200;
+  probe.offset.z = 0;
+  char msg[64] = {0};
+  char cmd[16] = {0};
+  char cmd1[16] = {0};
+  char cmd2[16] = {0};
+
+  bool SoftEndstopEnable = soft_endstop._enabled;
+  bool reenable = planner.leveling_active;
+
+  planner.leveling_active = false;
+  soft_endstop._enabled = false;
+  set_axis_never_homed(Z_AXIS);
+
+  SERIAL_ECHOLNPGM_P("ECHO:Heating the nozzle");
+
+  // Move quickly over the brush
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 X%s, Y%s, Z%s F1800", \
+           dtostrf(AUTOZ_BRUSH_X - AUTOZ_BRUSH_W, 1, 4, cmd), \
+           dtostrf(AUTOZ_BRUSH_Y, 1, 4, cmd1), \
+           dtostrf(AUTOZ_BRUSH_Z, 1, 4, cmd2));
+  //X:140.60 Y:135.20 Z:10.00 E:0.00
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  // Waiting for the heating
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "M109 S%s", dtostrf(tarTmp, 1, 4, cmd));
+  gcode.process_subcommands_now_P(msg);
+
+  // Obtain the dynamic threshold delete AutoZToolGetThreshold() checkTrigger() Filtered out
+  // snprintf(msg, sizeof(msg)/sizeof(msg[0]), "LOGD:TH BEFORE GET %s", dtostrf(AutoZTool.Threshold, 1, 4, cmd));
+  // TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM_P(msg));
+  // AutoZToolGetThreshold(&AutoZTool);
+  // snprintf(msg, sizeof(msg)/sizeof(msg[0]), "LOGD:TH AFTER GET %s", dtostrf(AutoZTool.Threshold, 1, 4, cmd));
+  // TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM_P(msg));
+
+  // Back to the suction
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F300 E%s", dtostrf(current_position.e - 1, 1, 4, cmd));
+  TERN_(AUTOTOOL_PRINT, SERIAL_ECHOLNPGM_P(msg));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+  set_current_from_steppers_for_axis(ALL_AXES_ENUM);
+  sync_plan_position();
+
+  // Nozzle cleaning
+  probe_clean_hotend();
+
+  // Close nozzle for heating
+  Temperature::temp_hotend[0].target = 0;
+  Temperature::temp_hotend[0].soft_pwm_amount = 0;
+  idle();
+
+  SERIAL_ECHOLNPGM_P("ECHO:CR-Touch probing");
+  // Slow to detect 检测速度慢 
+  float blZ = probe_at_point_by_crtouch(AUTOZ_TOOL_X - probe.offset.x, AUTOZ_TOOL_Y - probe.offset.y, 8, AUTOZ_TOOL_Z, 120);
+
+  SERIAL_ECHOLNPGM_P("ECHO: Probing Z_offset");
+  // Slow to detect 检测速度慢
+  float exZ = probe_at_point_by_sensor(AUTOZ_TOOL_X, AUTOZ_TOOL_Y, AUTOZ_TOOL_Z + BETWEEN_Z, AUTOZ_TOOL_Z, 60);
+
+  float offset = abs(exZ - blZ) - DEFORMATION_SIZE;
+  // offset = -(offset > 2.0 ? 2.0 : offset);
+  offset = -(offset > 4.5 ? 4.5 : offset);
+  // It is obtained that the height difference between the nozzle and the Touch is 0 after the nozzle completely touches the hot bed.
+  // According to the habit of manual adjustment, the height of an A4 paper should be increased to ensure normal discharge
+  // probe.offset.z = offset + 0.1;   // 0.1 It's the thickness of an A4 sheet of paper
+  // When Gcode slices, the first layer is 0.2. If the first layer is added here, it will become 0.3, resulting in the thickness of the first layer being 0.3
+  probe.offset.z = offset;
+  TERN_(EEPROM_SETTINGS, settings.save());
+
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "LOGD:***blZ=%s, exZ=%s, offset=%s***", \
+           dtostrf(blZ, 1, 4, cmd), \
+           dtostrf(exZ, 1, 4, cmd1), \
+           dtostrf(offset, 1, 4, cmd2));
+  TERN_(AUTOTOOL_RESULT, SERIAL_ECHOLNPGM_P(msg));
+
+  memset(msg, 0, sizeof(msg));
+  set_axis_never_homed(Z_AXIS);
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "%s", "G28 Z");
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "G0 F300 E%s", dtostrf(current_position.e + 1, 1, 4, cmd));
+  gcode.process_subcommands_now_P(msg);
+  planner.synchronize();
+
+  set_current_from_steppers_for_axis(ALL_AXES_ENUM);
+  sync_plan_position();
+
+  soft_endstop._enabled = SoftEndstopEnable;
+  planner.leveling_active = reenable;
+
+  // Restoring test results
+  memset(msg, 0, sizeof(msg));
+  snprintf(msg, sizeof(msg)/sizeof(msg[0]), "ok z<%s>", dtostrf(offset, 1, 4, cmd2));
+  TERN_(DWIN_CREALITY_LCD, DWIN_CompletedHeight());
+  SERIAL_ECHOLNPGM_P(msg);
+}
+
+#endif  // USE_AUTOZ_TOOL
 
 #if ENABLED(Z_PROBE_SLED)
 
@@ -242,9 +611,10 @@ xyz_pos_t Probe::offset; // Initialized by settings.load()
     #define DELAY_BEFORE_PROBING 25
   #endif
 
-  void Probe::set_probing_paused(const bool dopause) {
-    TERN_(PROBING_HEATERS_OFF, thermalManager.pause_heaters(dopause));
-    TERN_(PROBING_FANS_OFF, thermalManager.set_fans_paused(dopause));
+  void Probe::set_probing_paused(const bool dopause)
+  {
+    // TERN_(PROBING_HEATERS_OFF, thermalManager.pause_heaters(dopause));
+    // TERN_(PROBING_FANS_OFF, thermalManager.set_fans_paused(dopause));
     #if ENABLED(PROBING_STEPPERS_OFF)
       IF_DISABLED(DELTA, static uint8_t old_trusted);
       if (dopause) {
@@ -479,11 +849,11 @@ bool Probe::probe_down_to_z(const_float_t z, const_feedRate_t fr_mm_s) {
   DEBUG_SECTION(log_probe, "Probe::probe_down_to_z", DEBUGGING(LEVELING));
 
   #if BOTH(HAS_HEATED_BED, WAIT_FOR_BED_HEATER)
-    thermalManager.wait_for_bed_heating();
+    // thermalManager.wait_for_bed_heating();
   #endif
 
   #if BOTH(HAS_TEMP_HOTEND, WAIT_FOR_HOTEND)
-    thermalManager.wait_for_hotend_heating(active_extruder);
+    // thermalManager.wait_for_hotend_heating(active_extruder);
   #endif
 
   if (TERN0(BLTOUCH_SLOW_MODE, bltouch.deploy())) return true; // Deploy in LOW SPEED MODE on every probe action
@@ -768,6 +1138,11 @@ float Probe::probe_at_point(const_float_t rx, const_float_t ry, const ProbePtRai
       return NAN;
     }
     npos -= offset_xy;                                      // Get the nozzle position
+    // The coordinates also need to subtract the origin offset
+    #ifdef HAS_HOME_OFFSET
+      npos.x -= home_offset.x;
+      npos.y -= home_offset.y;
+    #endif
   }
   else if (!position_is_reachable(npos)) return NAN;        // The given position is in terms of the nozzle
 

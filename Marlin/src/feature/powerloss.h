@@ -74,6 +74,8 @@ typedef struct {
     uint8_t active_extruder;
   #endif
 
+  bool sd_printing_flag;
+
   #if DISABLED(NO_VOLUMETRICS)
     float filament_size[EXTRUDERS];
   #endif
@@ -114,7 +116,7 @@ typedef struct {
 
   // Relative axis modes
   uint8_t axis_relative;
-
+  uint16_t feedrate_percentage;
   // Misc. Marlin flags
   struct {
     bool raised:1;                // Raised before saved

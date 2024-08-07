@@ -62,8 +62,10 @@ void GcodeSuite::M18_M84() {
       if (TERN0(HAS_E_STEPPER_ENABLE, parser.seen_test('E'))) disable_e_steppers();
     }
     else
+    {
+      HMI_flag.power_back_to_zero_flag=false;
       planner.finish_and_disable();
-
+    }
     TERN_(AUTO_BED_LEVELING_UBL, ubl.steppers_were_disabled());
   }
 }

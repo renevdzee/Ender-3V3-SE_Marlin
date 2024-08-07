@@ -545,7 +545,7 @@
   #endif
 #else
   #undef EXTRUDERS
-  #define EXTRUDERS 0
+  #define EXTRUDERS 1
   #undef SINGLENOZZLE
   #undef SWITCHING_EXTRUDER
   #undef SWITCHING_NOZZLE
@@ -1014,7 +1014,7 @@
 #if ENABLED(DWIN_CREALITY_LCD)
   #define SERIAL_CATCHALL 0
   #ifndef LCD_SERIAL_PORT
-    #define LCD_SERIAL_PORT 3 // Creality 4.x board
+    #define LCD_SERIAL_PORT 2 // Creality 4.x board
   #endif
 #endif
 

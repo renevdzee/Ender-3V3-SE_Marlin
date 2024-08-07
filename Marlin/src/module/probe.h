@@ -28,6 +28,9 @@
 #include "../inc/MarlinConfig.h"
 
 #include "motion.h"
+#if ENABLED(USE_AUTOZ_TOOL)
+  #include "PressLeveled.h"
+#endif
 
 #if HAS_BED_PROBE
   enum ProbePtRaise : uint8_t {
@@ -55,6 +58,13 @@
 
 class Probe {
 public:
+  #if ENABLED(USE_AUTOZ_TOOL)
+    bool isNeedAutoOffset = false;
+    void probe_clean_hotend(void);
+    float probe_at_point_by_crtouch(float x, float y, float rdyZ, float minZ, int tSpdMM_MIN);
+    float probe_at_point_by_sensor(float x, float y, float rdyZ, float minZ, int tSpdMM_MIN);
+    void auto_get_offset();
+  #endif
 
   #if HAS_BED_PROBE
 

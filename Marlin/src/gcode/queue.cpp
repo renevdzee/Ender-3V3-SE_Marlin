@@ -207,6 +207,7 @@ bool GCodeQueue::enqueue_one_P(PGM_P const pgcode) {
 void GCodeQueue::enqueue_now_P(PGM_P const pgcode) {
   size_t i = 0;
   PGM_P p = pgcode;
+  if(ring_buffer.full()) return;  //rock_20230518  解决打印中界面卡死，系统不响应的问题
   for (;;) {
     char c;
     while ((c = pgm_read_byte(&p[i])) && c != '\n') i++;
@@ -543,14 +544,19 @@ void GCodeQueue::get_serial_commands() {
    * always receives complete command-lines, they can go directly
    * into the main command queue.
    */
-  inline void GCodeQueue::get_sdcard_commands() {
+  uint16_t SD_ReadTimeout = 0;
+  bool SD_Card_status = true;
+  bool sd_printing_autopause = false;
+  inline void GCodeQueue::get_sdcard_commands() 
+  {
     static uint8_t sd_input_state = PS_NORMAL;
 
     // Get commands if there are more in the file
     if (!IS_SD_FETCHING()) return;
 
     int sd_count = 0;
-    while (!ring_buffer.full() && !card.eof()) {
+    while (!ring_buffer.full() && !card.eof() && IS_SD_INSERTED())
+    {
       const int16_t n = card.get();
       const bool card_eof = card.eof();
       if (n < 0 && !card_eof) { SERIAL_ERROR_MSG(STR_SD_ERR_READ); continue; }
@@ -558,8 +564,8 @@ void GCodeQueue::get_serial_commands() {
       CommandLine &command = ring_buffer.commands[ring_buffer.index_w];
       const char sd_char = (char)n;
       const bool is_eol = ISEOL(sd_char);
-      if (is_eol || card_eof) {
-
+      if (is_eol || card_eof)
+      {
         // Reset stream state, terminate the buffer, and commit a non-empty command
         if (!is_eol && sd_count) ++sd_count;          // End of file with no newline
         if (!process_line_done(sd_input_state, command.buffer, sd_count)) {

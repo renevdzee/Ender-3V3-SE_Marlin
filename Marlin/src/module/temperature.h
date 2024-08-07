@@ -955,3 +955,4 @@ class Temperature {
 };
 
 extern Temperature thermalManager;
+extern PID_t auto_pid;  // Auto PID value

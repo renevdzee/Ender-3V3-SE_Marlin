@@ -406,6 +406,7 @@ void CardReader::printSelectedFilename() {
 }
 
 void CardReader::mount() {
+  delay(5);  // Power on
   flag.mounted = false;
   if (root.isOpen()) root.close();
 
@@ -413,7 +414,7 @@ void CardReader::mount() {
     #if defined(LCD_SDSS) && (LCD_SDSS != SDSS)
       && !driver->init(SD_SPI_SPEED, LCD_SDSS)
     #endif
-  ) SERIAL_ECHO_MSG(STR_SD_INIT_FAIL);
+  ) SERIAL_ECHO_MSG(STR_SD_INIT_FAIL);  //"No SD card"
   else if (!volume.init(driver))
     SERIAL_ERROR_MSG(STR_SD_VOL_INIT_FAIL);
   else if (!root.openRoot(&volume))
@@ -423,8 +424,7 @@ void CardReader::mount() {
     SERIAL_ECHO_MSG(STR_SD_CARD_OK);
   }
 
-  if (flag.mounted)
-    cdroot();
+  if (flag.mounted)cdroot();
   #if ENABLED(USB_FLASH_DRIVE_SUPPORT) || PIN_EXISTS(SD_DETECT)
     else if (marlin_state != MF_INITIALIZING)
       ui.set_status_P(GET_TEXT(MSG_SD_INIT_FAIL), -1);
@@ -465,7 +465,10 @@ void CardReader::manage_media() {
     }
     else {
       #if PIN_EXISTS(SD_DETECT)
-        release();                    // Card is released
+      if(!IS_SD_PRINTING() && !isPaused())
+      {
+        release();                    // Card is released rock_20210816
+      }
       #endif
     }
 
@@ -536,7 +539,14 @@ void CardReader::startOrResumeFilePrinting() {
 //
 void CardReader::endFilePrintNow(TERN_(SD_RESORT, const bool re_sort/*=false*/)) {
   TERN_(ADVANCED_PAUSE_FEATURE, did_pause_print = 0);
-  TERN_(DWIN_CREALITY_LCD, HMI_flag.print_finish = flag.sdprinting);
+   if(checkkey==Tune &&  !HMI_flag.print_finish)
+  {
+    TERN_(DWIN_CREALITY_LCD, HMI_flag.print_finish = flag.sdprinting);//fanzq_20230531
+  }
+  else if(checkkey!=Tune)
+  {
+      TERN_(DWIN_CREALITY_LCD, HMI_flag.print_finish = flag.sdprinting);//fanzq_20230531
+  }
   flag.abort_sd_printing = false;
   if (isFileOpen()) file.close();
   TERN_(SD_RESORT, if (re_sort) presort());

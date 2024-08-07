@@ -473,6 +473,32 @@ void _O2 Endstops::report_states() {
   #if BOTH(MARLIN_DEV_MODE, PROBE_ACTIVATION_SWITCH)
     print_es_state(probe_switch_activated(), PSTR(STR_PROBE_EN));
   #endif
+  if(axis_is_trusted(X_AXIS))
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_x_flag = true");
+  }
+  else
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_x_flag = false");
+  }
+
+  if(axis_is_trusted(Y_AXIS))
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_y_flag = true");
+  }
+  else
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_y_flag = false");
+  }
+
+  if(axis_is_trusted(Z_AXIS))
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_z_flag = true");
+  }
+  else
+  {
+    SERIAL_ECHOLNPGM("test_axis_known_z_flag = false");
+  }
   #if HAS_CUSTOM_PROBE_PIN
     print_es_state(PROBE_TRIGGERED(), PSTR(STR_Z_PROBE));
   #endif

@@ -37,6 +37,11 @@
 #define CHOPPER_MARLIN_119   { 5,  2, 3 }
 #define CHOPPER_09STEP_24V   { 3, -1, 5 }
 
+#define USER_X_24V  { 3, 1, 2 }
+#define USER_Y_24V  { 3, 1, 2 }
+#define USER_Z_24V  { 3, 1, 3 }
+#define USER_24V    { 3, 1, 1 }
+
 #if ENABLED(MONITOR_DRIVER_STATUS) && !defined(MONITOR_DRIVER_STATUS_INTERVAL_MS)
   #define MONITOR_DRIVER_STATUS_INTERVAL_MS 500U
 #endif

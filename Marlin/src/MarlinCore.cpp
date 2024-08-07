@@ -62,6 +62,13 @@
 #include "feature/pause.h"
 #include "sd/cardreader.h"
 
+// #include "../../../sd/cardreader.h"
+// Marlin\src\MarlinCore.cpp
+// Marlin\src\sd\cardreader.h
+#if ENABLED(USE_AUTOZ_TOOL)
+  #include "module/PressLeveled.h"
+#endif
+
 #include "lcd/marlinui.h"
 #if HAS_TOUCH_BUTTONS
   #include "lcd/touch/touch_buttons.h"
@@ -361,13 +368,15 @@ void startOrResumeJob() {
 
 #if ENABLED(SDSUPPORT)
 
-  inline void abortSDPrinting() {
+  inline void abortSDPrinting() 
+  {
+    HMI_flag.abort_end_flag=true;  //停止打印标志位
     IF_DISABLED(NO_SD_AUTOSTART, card.autofile_cancel());
     card.abortFilePrintNow(TERN_(SD_RESORT, true));
 
     queue.clear();
-    quickstop_stepper();
-
+    // quickstop_stepper();
+  
     print_job_timer.abort();
 
     IF_DISABLED(SD_ABORT_NO_COOLDOWN, thermalManager.disable_all_heaters());
@@ -379,13 +388,34 @@ void startOrResumeJob() {
     TERN_(POWER_LOSS_RECOVERY, recovery.purge());
 
     #ifdef EVENT_GCODE_SD_ABORT
-      queue.inject_P(PSTR(EVENT_GCODE_SD_ABORT));
+      // queue.inject_P(PSTR(EVENT_GCODE_SD_ABORT));
+      // rock_20210729
+      //gcode.process_subcommands_now_P(PSTR(EVENT_GCODE_SD_ABORT));
+      RUN_AND_WAIT_GCODE_CMD("G28XY", true);
+      RUN_AND_WAIT_GCODE_CMD("G1 X0 Y215", true);
+      gcode.process_subcommands_now_P("M84");
+      // " G28XY\nG1 X0 Y215\nM84"
+      
     #endif
-
+    // rock_20211018
+    // memset(&HMI_flag,0,sizeof(HMI_flag));
+    HMI_flag.cutting_line_flag = false;
+    HMI_flag.remove_card_flag = false;
+    HMI_flag.pause_flag = false;
+    HMI_flag.abort_end_flag=false; //
+    //PRINT_LOG("(HMI_flag.abort_end_flag123:",HMI_flag.abort_end_flag);
+    if(!HMI_flag.abort_end_flag) TERN_(DWIN_CREALITY_LCD, DWIN_CompletedHoming());  //回零完成标志位
+    // checkkey = MainMenu;
+    // rock_20211018
+    // gcode.process_subcommands_now("M30");
     TERN_(PASSWORD_AFTER_SD_PRINT_ABORT, password.lock_machine());
+   
+    // rock_20211009  // When printing stops, the position is cleared to clear
+    HMI_flag.disallow_recovery_flag = false;    
   }
 
-  inline void finishSDPrinting() {
+  inline void finishSDPrinting()
+  {
     if (queue.enqueue_one_P(PSTR("M1001"))) { // Keep trying until it gets queued
       marlin_state = MF_RUNNING;              // Signal to stop trying
       TERN_(PASSWORD_AFTER_SD_PRINT_END, password.lock_machine());
@@ -716,7 +746,8 @@ inline void manage_inactivity(const bool ignore_stepper_queue=false) {
  *  - Update the Průša MMU2
  *  - Handle Joystick jogging
  */
-void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
+void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) 
+{
   #if ENABLED(MARLIN_DEV_MODE)
     static uint16_t idle_depth = 0;
     if (++idle_depth > 5) SERIAL_ECHOLNPAIR("idle() call depth: ", idle_depth);
@@ -793,7 +824,8 @@ void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
 
   // Auto-report Temperatures / SD Status
   #if HAS_AUTO_REPORTING
-    if (!gcode.autoreport_paused) {
+    if (!gcode.autoreport_paused)
+    {
       TERN_(AUTO_REPORT_TEMPERATURES, thermalManager.auto_reporter.tick());
       TERN_(AUTO_REPORT_SD_STATUS, card.auto_reporter.tick());
       TERN_(AUTO_REPORT_POSITION, position_auto_reporter.tick());
@@ -1049,7 +1081,42 @@ inline void tmc_standby_setup() {
  *  - Open Touch Screen Calibration screen, if not calibrated
  *  - Set Marlin to RUNNING State
  */
-void setup() {
+#include "./module/stepper.h"
+/**
+ * [TrySDCardPrintRecovery :Automatic recover if remove SD card at printing]
+ * @Author Creality
+ * @Time   2021-07-26
+ */
+
+// static void TrySDCardPrintRecovery(void)
+// {
+//     static uint32_t lMs = millis();
+
+//     if((millis() - lMs) > 1)
+//     {
+//         lMs = millis();
+
+//         if(gLcdAutoUI.cardReadErr.creAutoPauseFlag && (gLcdAutoUI.AutoUIGetStatus() == DEVSTA_PRINTING))
+//         {
+//             /* try SD card mount */
+//             card.mount();
+
+//             /* SD card mount success */
+//             if(card.isMounted())
+//             {
+//                 /* try to recovery print when automatic pause */
+//                 queue.inject_P(PSTR("M24"));
+
+//                 gLcdAutoUI.cardReadErr.creAutoPauseFlag = false;
+
+//                 SERIAL_ECHOLN("-----------------------------try to recovery print when automatic pause");
+//             }
+//         }
+//     }
+// }
+
+void setup()
+{
   #ifdef BOARD_PREINIT
     BOARD_PREINIT(); // Low-level init (before serial init)
   #endif
@@ -1102,6 +1169,13 @@ void setup() {
 
   #if HAS_FREEZE_PIN
     SET_INPUT_PULLUP(FREEZE_PIN);
+  #endif
+
+  #if HAS_HEATER_0
+    OUT_WRITE(HEATER_0_PIN, LOW);
+  #endif
+  #if HAS_HEATED_BED
+    OUT_WRITE(HEATER_BED_PIN, LOW);
   #endif
 
   #if HAS_SUICIDE
@@ -1256,9 +1330,22 @@ void setup() {
   #if ENABLED(PROBE_TARE)
     SETUP_RUN(probe.tare_init());
   #endif
-
-  #if BOTH(SDSUPPORT, SDCARD_EEPROM_EMULATION)
+ 
+ #if ENABLED(SDSUPPORT) //解决第一次上电后再插卡，不读卡的问题。20230308
     SETUP_RUN(card.mount());          // Mount media with settings before first_load
+    // if(!IS_SD_INSERTED())//如果没有插卡
+    // {
+    //   DWIN_lcd_sd_status=false;
+    //   card.flag.mounted=true;
+    // }
+
+ #endif
+  //   // Handle SD Card insert / remove
+  // TERN_(SDSUPPORT, card.manage_media());
+  #if BOTH(SDSUPPORT, SDCARD_EEPROM_EMULATION)
+    
+    SETUP_RUN(card.mount());          // Mount media with settings before first_load
+    // PRINT_LOG("DWIN_lcd_sd_status:  ",DWIN_lcd_sd_status,"   isMounted():",card.isMounted());
   #endif
 
   SETUP_RUN(settings.first_load());   // Load data from EEPROM if available (or use defaults)
@@ -1309,6 +1396,11 @@ void setup() {
 
   #if HAS_BED_PROBE
     SETUP_RUN(endstops.enable_z_probe(false));
+  #endif
+
+  #if ENABLED(HAS_CHECKFILAMENT)
+    // FLOATING INPUT
+    SET_INPUT(CHECKFILAMENT_PIN);
   #endif
 
   #if HAS_STEPPER_RESET
@@ -1513,10 +1605,14 @@ void setup() {
 
   #if ENABLED(DWIN_CREALITY_LCD)
     Encoder_Configuration();
+    // test!! Used to clear E2PROM, brush as the new machine, observe the new machine after the first power on the situation.
+    // I2C_EEPROM_Reset();
     HMI_Init();
-    DWIN_JPG_CacheTo1(Language_English);
-    HMI_StartFrame(true);
-    DWIN_StatusChanged(GET_TEXT(WELCOME_MSG));
+    // change default language display,to user set language
+    // HMI_SetLanguage();
+    // DWIN_JPG_CacheTo1(Language_Chinese);
+    // HMI_StartFrame(true);
+    // DWIN_StatusChanged(GET_TEXT(WELCOME_MSG));
   #endif
 
   #if HAS_SERVICE_INTERVALS && DISABLED(DWIN_CREALITY_LCD)
@@ -1555,8 +1651,13 @@ void setup() {
   #endif
 
   marlin_state = MF_RUNNING;
+  
+  
 
   SETUP_LOG("setup() completed.");
+  
+  SERIAL_ECHOLNPAIR(" HMI_flag.language=: ", HMI_flag.language); // rock_20210909
+
 }
 
 /**
@@ -1572,20 +1673,54 @@ void setup() {
  *    card, host, or by direct injection. The queue will continue to fill
  *    as long as idle() or manage_inactivity() are being called.
  */
-void loop() {
-  do {
-    idle();
+// 获取当前的时间
+millis_t lMs_lcd_delay = 0;
+bool LCD_TURNOFF_FLAG = false;
+uint8_t record_lcd_flag = 0;
+extern bool SD_Card_status;
+extern bool sd_printing_autopause;
 
+#if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
+static void Auto_Turnof_Function()
+{
+  // 按钮无动作超时
+  if(millis()-lMs_lcd_delay > TURN_OFF_TIME)
+  {
+    if(!LCD_TURNOFF_FLAG)   // 没有熄灭屏
+    {
+      DWIN_Backlight_SetLuminance(DESTORY_SCREEN_BRIGHTNESS);
+      LCD_TURNOFF_FLAG=true;  // 灭屏
+    }
+  }
+}
+#endif
+
+void loop()
+{
+  do
+  {
+    idle();
     #if ENABLED(SDSUPPORT)
-      if (card.flag.abort_sd_printing) abortSDPrinting();
-      if (marlin_state == MF_SD_COMPLETE) finishSDPrinting();
+      if (card.flag.abort_sd_printing)
+      {
+        abortSDPrinting();
+        // SERIAL_ECHOLN("M79 S4");
+      }
+      if (marlin_state == MF_SD_COMPLETE) 
+      {
+        _remain_time=0;                 //rock_20210728
+        finishSDPrinting();
+        _remain_time=0;                 //rock_20210728
+      }
     #endif
 
     queue.advance();
-
     endstops.event_handler();
+    #if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
+      Auto_Turnof_Function(); //息屏逻辑
+    #endif
 
-    TERN_(HAS_TFT_LVGL_UI, printer_state_polling());
-
+    TERN_(HAS_TFT_LVGL_UI, printer_state_polling());    // APP_rock20210928
+    // TrySDCardPrintRecovery();  //尝试SD卡打印恢复 //rock_20230415
   } while (ENABLED(__AVR__)); // Loop forever on slower (AVR) boards
 }

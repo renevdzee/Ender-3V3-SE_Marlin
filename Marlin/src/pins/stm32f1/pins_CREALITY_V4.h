@@ -34,7 +34,7 @@
   #define BOARD_INFO_NAME      "Creality V4"
 #endif
 #ifndef DEFAULT_MACHINE_NAME
-  #define DEFAULT_MACHINE_NAME "Ender 3 V2"
+  #define DEFAULT_MACHINE_NAME "Ender 3 V3"
 #endif
 
 #define BOARD_NO_NATIVE_USB
@@ -82,6 +82,12 @@
 //
 #ifndef FIL_RUNOUT_PIN
   #define FIL_RUNOUT_PIN                    PA4   // "Pulled-high"
+#endif
+
+// Filament check pins
+#define HAS_CHECKFILAMENT
+#if ENABLED(HAS_CHECKFILAMENT)
+  #define CHECKFILAMENT_PIN                 PA4
 #endif
 
 //

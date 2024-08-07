@@ -41,7 +41,7 @@
 #if HAS_BUZZER
   #include "../../../libs/buzzer.h"
 #endif
-
+#include "../dwin_lcd.h"
 #include <stdlib.h>
 
 #ifndef ENCODER_PULSES_PER_STEP
@@ -49,7 +49,9 @@
 #endif
 
 ENCODER_Rate EncoderRate;
-
+extern millis_t lMs_lcd_delay; // 获取当前的时间
+extern bool LCD_TURNOFF_FLAG;  // 息屏标志位
+extern uint8_t record_lcd_flag;
 // Buzzer
 void Encoder_tick() {
   #if PIN_EXISTS(BEEPER)
@@ -83,21 +85,59 @@ ENCODER_DiffState Encoder_ReceiveAnalyze() {
   static signed char temp_diff = 0;
 
   ENCODER_DiffState temp_diffState = ENCODER_DIFF_NO;
-  if (BUTTON_PRESSED(EN1)) newbutton |= EN_A;
-  if (BUTTON_PRESSED(EN2)) newbutton |= EN_B;
-  if (BUTTON_PRESSED(ENC)) {
-    static millis_t next_click_update_ms;
-    if (ELAPSED(now, next_click_update_ms)) {
-      next_click_update_ms = millis() + 300;
-      Encoder_tick();
-      #if PIN_EXISTS(LCD_LED)
-        //LED_Action();
+  if (BUTTON_PRESSED(EN1))
+  {
+    newbutton |= EN_A;
+
+    #if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
+      // rock_20170727
+      lMs_lcd_delay = millis();
+      if(LCD_TURNOFF_FLAG)
+      {
+        LCD_TURNOFF_FLAG=false;
+        DWIN_Backlight_SetLuminance(255);
+      }
+    #endif
+  }
+  if (BUTTON_PRESSED(EN2))
+  {
+    newbutton |= EN_B;
+    #if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
+      lMs_lcd_delay=millis();
+      if(LCD_TURNOFF_FLAG)
+      {
+        LCD_TURNOFF_FLAG=false;
+        DWIN_Backlight_SetLuminance(255);
+      }
+    #endif
+  }
+  if (BUTTON_PRESSED(ENC))
+  {
+    delay(25);
+    if (BUTTON_PRESSED(ENC))
+    {
+      #if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
+        lMs_lcd_delay=millis();
+        if(LCD_TURNOFF_FLAG)
+        {
+          LCD_TURNOFF_FLAG=false;
+          DWIN_Backlight_SetLuminance(255);
+        }
       #endif
-      const bool was_waiting = wait_for_user;
-      wait_for_user = false;
-      return was_waiting ? ENCODER_DIFF_NO : ENCODER_DIFF_ENTER;
+      static millis_t next_click_update_ms;
+      if (ELAPSED(now, next_click_update_ms))
+      {
+        next_click_update_ms = millis() + 300;
+        Encoder_tick();
+        #if PIN_EXISTS(LCD_LED)
+          //LED_Action();
+        #endif
+        const bool was_waiting = wait_for_user;
+        wait_for_user = false;
+        return was_waiting ? ENCODER_DIFF_NO : ENCODER_DIFF_ENTER;
+      }
+      else return ENCODER_DIFF_NO;
     }
-    else return ENCODER_DIFF_NO;
   }
   if (newbutton != lastEncoderBits) {
     switch (newbutton) {
@@ -121,24 +161,32 @@ ENCODER_DiffState Encoder_ReceiveAnalyze() {
     lastEncoderBits = newbutton;
   }
 
-  if (abs(temp_diff) >= ENCODER_PULSES_PER_STEP) {
-    if (temp_diff > 0) temp_diffState = ENCODER_DIFF_CW;
-    else temp_diffState = ENCODER_DIFF_CCW;
+  if (abs(temp_diff) >= ENCODER_PULSES_PER_STEP) 
+  {
+    if(temp_diff > 0)
+    {
+      temp_diffState = ENCODER_DIFF_CW;
+    }
+    else
+    {
+      temp_diffState = ENCODER_DIFF_CCW;
+    }
 
     #if ENABLED(ENCODER_RATE_MULTIPLIER)
-
       millis_t ms = millis();
       int32_t encoderMultiplier = 1;
 
       // if must encoder rati multiplier
-      if (EncoderRate.enabled) {
+      if (EncoderRate.enabled)
+      {
         const float abs_diff = ABS(temp_diff),
                     encoderMovementSteps = abs_diff / (ENCODER_PULSES_PER_STEP);
-        if (EncoderRate.lastEncoderTime) {
+        if (EncoderRate.lastEncoderTime)
+        {
           // Note that the rate is always calculated between two passes through the
           // loop and that the abs of the temp_diff value is tracked.
           const float encoderStepRate = encoderMovementSteps / float(ms - EncoderRate.lastEncoderTime) * 1000;
-               if (encoderStepRate >= ENCODER_100X_STEPS_PER_SEC) encoderMultiplier = 100;
+          if (encoderStepRate >= ENCODER_100X_STEPS_PER_SEC) encoderMultiplier = 100;
           else if (encoderStepRate >= ENCODER_10X_STEPS_PER_SEC)  encoderMultiplier = 10;
           else if (encoderStepRate >= ENCODER_5X_STEPS_PER_SEC)   encoderMultiplier = 5;
         }

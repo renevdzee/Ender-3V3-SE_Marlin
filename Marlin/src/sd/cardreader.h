@@ -69,12 +69,12 @@ extern const char M23_STR[], M24_STR[];
 typedef struct {
   bool saving:1,
        logging:1,
-       sdprinting:1,
-       sdprintdone:1,
+       sdprinting:1,  // printing
+       sdprintdone:1, // Print complete
        mounted:1,
        filenameIsDir:1,
        workDirIsRoot:1,
-       abort_sd_printing:1
+       abort_sd_printing:1 // SD card printing is pause
        #if ENABLED(BINARY_FILE_TRANSFER)
          , binary_mode:1
        #endif
@@ -214,6 +214,7 @@ public:
   // Print File stats
   static inline uint32_t getFileSize()  { return filesize; }
   static inline uint32_t getIndex()     { return sdpos; }
+  static inline uint32_t getIndex1()    { return file.curPosition(); }
   static inline bool isFileOpen()       { return isMounted() && file.isOpen(); }
   static inline bool eof()              { return getIndex() >= getFileSize(); }
 

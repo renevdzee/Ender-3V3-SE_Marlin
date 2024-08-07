@@ -33,6 +33,8 @@
 #if ENABLED(DWIN_CREALITY_LCD)
 
 #include "../../inc/MarlinConfig.h"
+#include "e3v2/dwin.h"
+#include "e3v2/ui_position.h"
 
 #include "dwin_lcd.h"
 #include <string.h> // for memset
@@ -89,7 +91,8 @@ inline void DWIN_Send(size_t &i) {
 /*-------------------------------------- System variable function --------------------------------------*/
 
 // Handshake (1: Success, 0: Fail)
-bool DWIN_Handshake(void) {
+bool DWIN_Handshake(void)
+{
   #ifndef LCD_BAUDRATE
     #define LCD_BAUDRATE 115200
   #endif
@@ -101,11 +104,15 @@ bool DWIN_Handshake(void) {
   DWIN_Byte(i, 0x00);
   DWIN_Send(i);
 
-  while (LCD_SERIAL.available() > 0 && recnum < (signed)sizeof(databuf)) {
+  while (LCD_SERIAL.available() > 0 && recnum < (signed)sizeof(databuf))
+  {
     databuf[recnum] = LCD_SERIAL.read();
     // ignore the invalid data
-    if (databuf[0] != FHONE) { // prevent the program from running.
-      if (recnum > 0) {
+    if (databuf[0] != FHONE)
+    {
+      // prevent the program from running.
+      if (recnum > 0)
+      {
         recnum = 0;
         ZERO(databuf);
       }
@@ -124,26 +131,31 @@ bool DWIN_Handshake(void) {
 
 // Set the backlight luminance
 //  luminance: (0x00-0xFF)
-void DWIN_Backlight_SetLuminance(const uint8_t luminance) {
+void DWIN_Backlight_SetLuminance(const uint8_t luminance) 
+{
   size_t i = 0;
-  DWIN_Byte(i, 0x30);
-  DWIN_Byte(i, _MAX(luminance, 0x1F));
+  DWIN_Byte(i, 0x5f);
+  DWIN_Byte(i, luminance); //_MAX(luminance, 0x1F));
   DWIN_Send(i);
 }
 
 // Set screen display direction
 //  dir: 0=0°, 1=90°, 2=180°, 3=270°
-void DWIN_Frame_SetDir(uint8_t dir) {
-  size_t i = 0;
-  DWIN_Byte(i, 0x34);
-  DWIN_Byte(i, 0x5A);
-  DWIN_Byte(i, 0xA5);
-  DWIN_Byte(i, dir);
-  DWIN_Send(i);
+void DWIN_Frame_SetDir(uint8_t dir)
+{
+  /*
+    size_t i = 0;
+    DWIN_Byte(i, 0x34);
+    DWIN_Byte(i, 0x5A);
+    DWIN_Byte(i, 0xA5);
+    DWIN_Byte(i, dir);
+    DWIN_Send(i);
+  */
 }
 
 // Update display
-void DWIN_UpdateLCD(void) {
+void DWIN_UpdateLCD(void)
+{
   size_t i = 0;
   DWIN_Byte(i, 0x3D);
   DWIN_Send(i);
@@ -173,15 +185,37 @@ void DWIN_Draw_Point(uint8_t width, uint8_t height, uint16_t x, uint16_t y) {
   DWIN_Word(i, y);
   DWIN_Send(i);
 }
+void DWIN_Set_Color(uint16_t FC,uint16_t BC)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x40);
+  DWIN_Word(i, FC);  //前景色
+  DWIN_Word(i, BC);  //背景色
+  DWIN_Send(i);
+}
+
+void DWIN_Set_24_Color(uint32_t BC)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x40); 
+  DWIN_Byte(i, BC>>16); //背景色
+  DWIN_Byte(i, BC>>8);
+  DWIN_Byte(i, BC);
+  DWIN_Byte(i, 255);  //前景色
+  DWIN_Byte(i, 255);
+  DWIN_Byte(i, 255);
+  DWIN_Send(i);
+}
 
 // Draw a line
 //  color: Line segment color
 //  xStart/yStart: Start point
 //  xEnd/yEnd: End point
-void DWIN_Draw_Line(uint16_t color, uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd) {
+void DWIN_Draw_Line(uint16_t color, uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd) 
+{
   size_t i = 0;
-  DWIN_Byte(i, 0x03);
-  DWIN_Word(i, color);
+  DWIN_Set_Color(color, 0xffff);
+  DWIN_Byte(i, 0x56);
   DWIN_Word(i, xStart);
   DWIN_Word(i, yStart);
   DWIN_Word(i, xEnd);
@@ -195,11 +229,32 @@ void DWIN_Draw_Line(uint16_t color, uint16_t xStart, uint16_t yStart, uint16_t x
 //  xStart/yStart: upper left point
 //  xEnd/yEnd: lower right point
 void DWIN_Draw_Rectangle(uint8_t mode, uint16_t color,
-                         uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd) {
+                         uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd)
+{
   size_t i = 0;
-  DWIN_Byte(i, 0x05);
-  DWIN_Byte(i, mode);
-  DWIN_Word(i, color);
+  uint8_t temp_mode = 0;
+  switch (mode)
+  {
+    case 0:
+      temp_mode = 0x59;
+      break;
+     case 1:
+      temp_mode = 0x5B;
+      break;
+     case 2:
+      temp_mode = 0x69; //背景色显示矩形区域
+      break;
+     case 3:
+      temp_mode = 0x5A; //背景色填充矩形区域
+      break;
+    default:
+      break;
+  }
+  if(xEnd >= DWIN_WIDTH)
+    xEnd = DWIN_WIDTH - 1;
+  DWIN_Set_Color(color,0xffff);
+  i = 0;
+  DWIN_Byte(i, temp_mode);
   DWIN_Word(i, xStart);
   DWIN_Word(i, yStart);
   DWIN_Word(i, xEnd);
@@ -217,6 +272,7 @@ void DWIN_Draw_Rectangle(uint8_t mode, uint16_t color,
 void DWIN_Frame_AreaMove(uint8_t mode, uint8_t dir, uint16_t dis,
                          uint16_t color, uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd) {
   size_t i = 0;
+  if(xEnd==DWIN_WIDTH) xEnd-=1;
   DWIN_Byte(i, 0x09);
   DWIN_Byte(i, (mode << 7) | dir);
   DWIN_Word(i, dis);
@@ -228,6 +284,42 @@ void DWIN_Frame_AreaMove(uint8_t mode, uint8_t dir, uint16_t dis,
   DWIN_Send(i);
 }
 
+// uint16_t color,uint8_t width,uint8_t x_step,uint16_t y_ratio     通道  固定  XsYs      XeYe      颜色    粗细  X步长  Y=0位置 Y数据比例
+// AA 84 00    FF    0010 0020 0074 00C8 00F800  01    05     00C8    0100      CC33C33C 
+void Draw_Curve_Set(uint8_t line_wide,uint8_t step_x,uint16_t step_y,uint32_t colour)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x84);
+  DWIN_Byte(i, 0x00);
+  DWIN_Byte(i, 0xFF);
+  DWIN_Word(i, Curve_Psition_Start_X); //left_up_x
+  DWIN_Word(i, Curve_Psition_Start_Y); //left_up_y
+  DWIN_Word(i, Curve_Psition_End_X);  //right_down_x
+  DWIN_Word(i, Curve_Psition_End_Y); //right_down_y
+
+  DWIN_Byte(i, colour>>16);
+  DWIN_Word(i, colour);    //颜色
+
+  DWIN_Byte(i,line_wide);  //粗细
+  DWIN_Byte(i, step_x);   //x步长
+  DWIN_Word(i, Curve_Zero_Y);
+  DWIN_Word(i, step_y);
+  DWIN_Send(i);
+}
+
+void Draw_Curve_Data(uint8_t index,int16_t* temp_data)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x84);
+  DWIN_Byte(i, 0x00);//通道
+  DWIN_Byte(i, 0x00);//固定
+  //数据
+  for(uint8_t num=0;num<index;num++)
+  {
+    DWIN_Word(i, *(temp_data+num));
+  }
+  DWIN_Send(i);
+}
 /*---------------------------------------- Text related functions ----------------------------------------*/
 
 // Draw a string
@@ -239,22 +331,47 @@ void DWIN_Frame_AreaMove(uint8_t mode, uint8_t dir, uint16_t dis,
 //  x/y: Upper-left coordinate of the string
 //  *string: The string
 void DWIN_Draw_String(bool widthAdjust, bool bShow, uint8_t size,
-                      uint16_t color, uint16_t bColor, uint16_t x, uint16_t y, char *string) {
+                      uint16_t color, uint16_t bColor, uint16_t x, uint16_t y, char *string)
+{
   size_t i = 0;
-  DWIN_Byte(i, 0x11);
-  // Bit 7: widthAdjust
-  // Bit 6: bShow
-  // Bit 5-4: Unused (0)
-  // Bit 3-0: size
-  DWIN_Byte(i, (widthAdjust * 0x80) | (bShow * 0x40) | size);
-  DWIN_Word(i, color);
-  DWIN_Word(i, bColor);
+  char mode;
+  if(size == font10x20)
+  {
+    size = font8x16;
+  }
+  DWIN_Byte(i, 0x98);
   DWIN_Word(i, x);
   DWIN_Word(i, y);
+  DWIN_Byte(i, 0);  //字库
+
+  if(bShow)
+  {
+    // 显示背景;
+    mode = 0x40;
+  }
+  else
+  {
+    mode = 0;
+  }
+
+  // GBK编码
+  mode |= 0x02;
+
+  DWIN_Byte(i, mode);
+  DWIN_Byte(i, size);
+  DWIN_Word(i, color);
+  DWIN_Word(i, bColor);
   DWIN_String(i, string);
   DWIN_Send(i);
 }
 
+void DWIN_SHOW_MAIN_PIC()
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x70);
+  DWIN_Word(i, 0);
+  DWIN_Send(i);
+}
 // Draw a positive integer
 //  bShow: true=display background color; false=don't display background color
 //  zeroFill: true=zero fill; false=no zero fill
@@ -266,8 +383,13 @@ void DWIN_Draw_String(bool widthAdjust, bool bShow, uint8_t size,
 //  x/y: Upper-left coordinate
 //  value: Integer value
 void DWIN_Draw_IntValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t size, uint16_t color,
-                          uint16_t bColor, uint8_t iNum, uint16_t x, uint16_t y, uint16_t value) {
+                          uint16_t bColor, uint8_t iNum, uint16_t x, uint16_t y, uint16_t value)
+{
   size_t i = 0;
+  if(size == font10x20)
+  {
+    size = font8x16;
+  }
   DWIN_Byte(i, 0x14);
   // Bit 7: bshow
   // Bit 6: 1 = signed; 0 = unsigned number;
@@ -282,7 +404,8 @@ void DWIN_Draw_IntValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t 
   DWIN_Word(i, x);
   DWIN_Word(i, y);
   #if 0
-    for (char count = 0; count < 8; count++) {
+    for (char count = 0; count < 8; count++)
+    {
       DWIN_Byte(i, value);
       value >>= 8;
       if (!(value & 0xFF)) break;
@@ -296,10 +419,50 @@ void DWIN_Draw_IntValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t 
       value >>= 8;
     }
   #endif
-
+  // DWIN_Draw_String(true, true,size,color, bColor, x, y, cmd);
   DWIN_Send(i);
 }
 
+void DWIN_Draw_IntValue_N0SPACE(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t size, uint16_t color,
+                          uint16_t bColor, uint8_t iNum, uint16_t x, uint16_t y, uint16_t value)
+{
+  size_t i = 0;
+  if(size == font10x20)
+  {
+    size = font8x16;
+  }
+  DWIN_Byte(i, 0x15);
+  // Bit 7: bshow
+  // Bit 6: 1 = signed; 0 = unsigned number;
+  // Bit 5: zeroFill
+  // Bit 4: zeroMode
+  // Bit 3-0: size
+  DWIN_Byte(i, (bShow * 0x80) | (zeroFill * 0x20) | (zeroMode * 0x10) | size);
+  DWIN_Word(i, color);
+  DWIN_Word(i, bColor);
+  DWIN_Byte(i, iNum);
+  DWIN_Byte(i, 0); // fNum
+  DWIN_Word(i, x);
+  DWIN_Word(i, y);
+  #if 0
+    for (char count = 0; count < 8; count++)
+    {
+      DWIN_Byte(i, value);
+      value >>= 8;
+      if (!(value & 0xFF)) break;
+    }
+  #else
+    // Write a big-endian 64 bit integer
+    const size_t p = i + 1;
+    for (char count = 8; count--;) { // 7..0
+      ++i;
+      DWIN_SendBuf[p + count] = value;
+      value >>= 8;
+    }
+  #endif
+  // DWIN_Draw_String(true, true,size,color, bColor, x, y, cmd);
+  DWIN_Send(i);
+}
 // Draw a floating point number
 //  bShow: true=display background color; false=don't display background color
 //  zeroFill: true=zero fill; false=no zero fill
@@ -312,9 +475,14 @@ void DWIN_Draw_IntValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t 
 //  x/y: Upper-left point
 //  value: Float value
 void DWIN_Draw_FloatValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t size, uint16_t color,
-                            uint16_t bColor, uint8_t iNum, uint8_t fNum, uint16_t x, uint16_t y, long value) {
+                            uint16_t bColor, uint8_t iNum, uint8_t fNum, uint16_t x, uint16_t y, long value)
+{
   //uint8_t *fvalue = (uint8_t*)&value;
   size_t i = 0;
+  if(size == font10x20)
+  {
+    size = font8x16;
+  }
   DWIN_Byte(i, 0x14);
   DWIN_Byte(i, (bShow * 0x80) | (zeroFill * 0x20) | (zeroMode * 0x10) | size);
   DWIN_Word(i, color);
@@ -337,7 +505,8 @@ void DWIN_Draw_FloatValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_
 
 // Draw JPG and cached in #0 virtual display area
 // id: Picture ID
-void DWIN_JPG_ShowAndCache(const uint8_t id) {
+void DWIN_JPG_ShowAndCache(const uint8_t id)
+{
   size_t i = 0;
   DWIN_Word(i, 0x2200);
   DWIN_Byte(i, id);
@@ -348,22 +517,45 @@ void DWIN_JPG_ShowAndCache(const uint8_t id) {
 //  libID: Icon library ID
 //  picID: Icon ID
 //  x/y: Upper-left point
-void DWIN_ICON_Show(uint8_t libID, uint8_t picID, uint16_t x, uint16_t y) {
+void DWIN_ICON_Not_Filter_Show(uint8_t libID, uint8_t picID, uint16_t x, uint16_t y) 
+{
   NOMORE(x, DWIN_WIDTH - 1);
   NOMORE(y, DWIN_HEIGHT - 1); // -- ozy -- srl
   size_t i = 0;
-  DWIN_Byte(i, 0x23);
+
+  DWIN_Byte(i, 0x97);
   DWIN_Word(i, x);
   DWIN_Word(i, y);
-  DWIN_Byte(i, 0x80 | libID);
-  DWIN_Byte(i, picID);
+  DWIN_Byte(i, libID);
+  DWIN_Byte(i, 0x01);
+  DWIN_Word(i, picID);
+  DWIN_Send(i);
+}
+
+// Draw an Icon
+// libID: Icon library ID
+// picID: Icon ID
+// x/y: Upper-left point
+void DWIN_ICON_Show(uint8_t libID, uint8_t picID, uint16_t x, uint16_t y)
+{
+  NOMORE(x, DWIN_WIDTH - 1);
+  // -- ozy -- srl
+  NOMORE(y, DWIN_HEIGHT - 1);
+  size_t i = 0;
+  DWIN_Byte(i, 0x97);
+  DWIN_Word(i, x);
+  DWIN_Word(i, y);
+  DWIN_Byte(i, libID);
+  DWIN_Byte(i, 0x00);
+  DWIN_Word(i, picID);
   DWIN_Send(i);
 }
 
 // Unzip the JPG picture to a virtual display area
 //  n: Cache index
 //  id: Picture ID
-void DWIN_JPG_CacheToN(uint8_t n, uint8_t id) {
+void DWIN_JPG_CacheToN(uint8_t n, uint8_t id)
+{
   size_t i = 0;
   DWIN_Byte(i, 0x25);
   DWIN_Byte(i, n);
@@ -379,8 +571,19 @@ void DWIN_JPG_CacheToN(uint8_t n, uint8_t id) {
 void DWIN_Frame_AreaCopy(uint8_t cacheID, uint16_t xStart, uint16_t yStart,
                          uint16_t xEnd, uint16_t yEnd, uint16_t x, uint16_t y) {
   size_t i = 0;
+  /*
   DWIN_Byte(i, 0x27);
   DWIN_Byte(i, 0x80 | cacheID);
+  DWIN_Word(i, xStart);
+  DWIN_Word(i, yStart);
+  DWIN_Word(i, xEnd);
+  DWIN_Word(i, yEnd);
+  DWIN_Word(i, x);
+  DWIN_Word(i, y);
+  DWIN_Send(i);
+  */
+  DWIN_Byte(i, 0x71);
+  DWIN_Byte(i, cacheID);
   DWIN_Word(i, xStart);
   DWIN_Word(i, yStart);
   DWIN_Word(i, xEnd);
@@ -423,6 +626,27 @@ void DWIN_ICON_AnimationControl(uint16_t state) {
   size_t i = 0;
   DWIN_Byte(i, 0x28);
   DWIN_Word(i, state);
+  DWIN_Send(i);
+}
+
+void DWIN_ICON_WR_SRAM(uint16_t data)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0x31);
+  DWIN_Byte(i, 0x5A);
+  DWIN_Word(i, data);
+  DWIN_Send(i);
+}
+
+void DWIN_ICON_SHOW_SRAM(uint16_t x,uint16_t y,uint16_t addr)
+{
+  size_t i = 0;
+  DWIN_Byte(i, 0xC1);
+  DWIN_Byte(i, 0x12);
+  DWIN_Word(i, x);
+  DWIN_Word(i, y);
+  DWIN_Byte(i, 0);
+  DWIN_Word(i, addr);
   DWIN_Send(i);
 }
 

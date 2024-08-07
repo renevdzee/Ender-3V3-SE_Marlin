@@ -2662,7 +2662,7 @@
     #define XY_PROBE_FEEDRATE ((homing_feedrate_mm_m.x + homing_feedrate_mm_m.y) / 2)
   #endif
   #ifndef NOZZLE_TO_PROBE_OFFSET
-    #define NOZZLE_TO_PROBE_OFFSET { 0, 0, 0 }
+    #define NOZZLE_TO_PROBE_OFFSET { -26.6, -10.2, 0 }
   #endif
 #else
   #undef NOZZLE_TO_PROBE_OFFSET
@@ -3018,7 +3018,7 @@
 
 // Fallback SPI Speed for SD
 #if ENABLED(SDSUPPORT) && !defined(SD_SPI_SPEED)
-  #define SD_SPI_SPEED SPI_FULL_SPEED
+  #define SD_SPI_SPEED SPI_FULL_SPEED  
 #endif
 
 // Defined here to catch the above defines

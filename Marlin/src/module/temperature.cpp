@@ -222,7 +222,7 @@
 #endif
 
 Temperature thermalManager;
-
+PID_t auto_pid = { 0, 0, 0 };
 const char str_t_thermal_runaway[] PROGMEM = STR_T_THERMAL_RUNAWAY,
            str_t_heating_failed[] PROGMEM = STR_T_HEATING_FAILED;
 
@@ -678,15 +678,21 @@ volatile bool Temperature::raw_temps_ready = false;
         #define MAX_CYCLE_TIME_PID_AUTOTUNE 20L
       #endif
       if ((ms - _MIN(t1, t2)) > (MAX_CYCLE_TIME_PID_AUTOTUNE * 60L * 1000L)) {
-        TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0));
+        TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0,heater_id));
         TERN_(EXTENSIBLE_UI, ExtUI::onPidTuning(ExtUI::result_t::PID_TUNING_TIMEOUT));
         SERIAL_ECHOLNPGM(STR_PID_TIMEOUT);
         break;
       }
 
-      if (cycles > ncycles && cycles > 2) {
+      if (cycles > ncycles && cycles > 2)
+      {
         SERIAL_ECHOLNPGM(STR_PID_AUTOTUNE_FINISHED);
-
+        // rock_20221011
+        HMI_flag.PID_autotune_end = true;
+        end_flag=false; //防止反复刷新曲线完成指令
+        auto_pid.Kp = tune_pid.Kp;
+        auto_pid.Ki = tune_pid.Ki;
+        auto_pid.Kd = tune_pid.Kd;
         #if EITHER(PIDTEMPBED, PIDTEMPCHAMBER)
           PGM_P const estring = GHV(PSTR("chamber"), PSTR("bed"), NUL_STR);
           say_default_(); SERIAL_ECHOPGM_P(estring); SERIAL_ECHOLNPAIR("Kp ", tune_pid.Kp);
@@ -820,11 +826,13 @@ int16_t Temperature::getHeaterPower(const heater_id_t heater_id) {
     }while(0)
 
     uint8_t fanDone = 0;
-    LOOP_L_N(f, COUNT(fanBit)) {
+    LOOP_L_N(f, COUNT(fanBit))
+    {
       const uint8_t realFan = pgm_read_byte(&fanBit[f]);
       if (TEST(fanDone, realFan)) continue;
       const bool fan_on = TEST(fanState, realFan);
-      switch (f) {
+      switch (f)
+      {
         #if ENABLED(AUTO_POWER_CHAMBER_FAN)
           case CHAMBER_FAN_INDEX:
             chamberfan_speed = fan_on ? CHAMBER_AUTO_FAN_SPEED : 0;
@@ -942,14 +950,14 @@ void Temperature::_temp_error(const heater_id_t heater_id, PGM_P const serial_ms
 
 void Temperature::max_temp_error(const heater_id_t heater_id) {
   #if ENABLED(DWIN_CREALITY_LCD) && (HAS_HOTEND || HAS_HEATED_BED)
-    DWIN_Popup_Temperature(1);
+    DWIN_Popup_Temperature(1,heater_id);
   #endif
   _temp_error(heater_id, PSTR(STR_T_MAXTEMP), GET_TEXT(MSG_ERR_MAXTEMP));
 }
 
 void Temperature::min_temp_error(const heater_id_t heater_id) {
   #if ENABLED(DWIN_CREALITY_LCD) && (HAS_HOTEND || HAS_HEATED_BED)
-    DWIN_Popup_Temperature(0);
+    DWIN_Popup_Temperature(0,heater_id);
   #endif
   _temp_error(heater_id, PSTR(STR_T_MINTEMP), GET_TEXT(MSG_ERR_MINTEMP));
 }
@@ -1248,7 +1256,7 @@ void Temperature::manage_heater() {
           if (watch_hotend[e].check(degHotend(e)))  // Increased enough?
             start_watching_hotend(e);               // If temp reached, turn off elapsed check
           else {
-            TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0));
+            TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0,0));//喷嘴温度过低
             _temp_error((heater_id_t)e, str_t_heating_failed, GET_TEXT(MSG_HEATING_FAILED_LCD));
           }
         }
@@ -1291,7 +1299,7 @@ void Temperature::manage_heater() {
         if (watch_bed.check(degBed()))          // Increased enough?
           start_watching_bed();                 // If temp reached, turn off elapsed check
         else {
-          TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0));
+          TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0,1));//热床温度过低
           _temp_error(H_BED, str_t_heating_failed, GET_TEXT(MSG_HEATING_FAILED_LCD));
         }
       }
@@ -1544,9 +1552,15 @@ void Temperature::manage_heater() {
   #if ENABLED(LASER_COOLANT_FLOW_METER)
     cooler.flowmeter_task(ms);
     #if ENABLED(FLOWMETER_SAFETY)
-      if (cutter.enabled() && cooler.check_flow_too_low()) {
+      if (cooler.check_flow_too_low())
+      {
+        if (cutter.enabled())
+        {
+          TERN_(HAS_DISPLAY, ui.flow_fault());
+        }
         cutter.disable();
-        ui.flow_fault();
+        // Immediately kill stepper inline power output
+        cutter.cutter_mode = CUTTER_MODE_ERROR;
       }
     #endif
   #endif
@@ -2427,7 +2441,7 @@ void Temperature::init() {
         state = TRRunaway;
 
       case TRRunaway:
-        TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0));
+        TERN_(DWIN_CREALITY_LCD, DWIN_Popup_Temperature(0,heater_id));
         _temp_error(heater_id, str_t_thermal_runaway, GET_TEXT(MSG_THERMAL_RUNAWAY));
     }
   }
@@ -3383,7 +3397,8 @@ void Temperature::isr() {
 
   void Temperature::print_heater_states(const uint8_t target_extruder
     OPTARG(TEMP_SENSOR_1_AS_REDUNDANT, const bool include_r/*=false*/)
-  ) {
+  ) 
+  {
     #if HAS_TEMP_HOTEND
       print_heater_state(H_NONE, degHotend(target_extruder), degTargetHotend(target_extruder) OPTARG(SHOW_TEMP_ADC_VALUES, rawHotendTemp(target_extruder)));
       #if ENABLED(TEMP_SENSOR_1_AS_REDUNDANT)
@@ -3422,6 +3437,15 @@ void Temperature::isr() {
         SERIAL_ECHO(getHeaterPower((heater_id_t)e));
       }
     #endif
+
+    #if HAS_FAN0
+      uint8_t cloud_fan0_speed = thermalManager.fan_speed[0];
+      SERIAL_ECHOPAIR(" FAN0@:", cloud_fan0_speed);
+    #endif
+    #if HAS_FAN1
+      uint8_t cloud_fan1_speed = thermalManager.fan_speed[1];
+      SERIAL_ECHOPAIR(" FAN1@:", cloud_fan1_speed);
+    #endif
   }
 
   #if ENABLED(AUTO_REPORT_TEMPERATURES)
@@ -3434,9 +3458,9 @@ void Temperature::isr() {
       const bool heating = isHeatingHotend(e);
       ui.status_printf_P(0,
         #if HAS_MULTI_HOTEND
-          PSTR("E%c " S_FMT), '1' + e
+          PSTR("Extruder%c " S_FMT), '1' + e
         #else
-          PSTR("E " S_FMT)
+          PSTR("Extruder " S_FMT)
         #endif
         , heating ? GET_TEXT(MSG_HEATING) : GET_TEXT(MSG_COOLING)
       );
@@ -3554,7 +3578,8 @@ void Temperature::isr() {
 
       } while (wait_for_heatup && TEMP_CONDITIONS);
 
-      if (wait_for_heatup) {
+      if (wait_for_heatup) 
+      {
         wait_for_heatup = false;
         #if ENABLED(DWIN_CREALITY_LCD)
           HMI_flag.heat_flag = 0;
@@ -3704,7 +3729,7 @@ void Temperature::isr() {
     void Temperature::wait_for_bed_heating() {
       if (isHeatingBed()) {
         SERIAL_ECHOLNPGM("Wait for bed heating...");
-        LCD_MESSAGEPGM(MSG_BED_HEATING);
+        // LCD_MESSAGEPGM(MSG_BED_HEATING);
         wait_for_bed();
         ui.reset_status();
       }

@@ -258,7 +258,7 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-  #define WATCH_TEMP_PERIOD  20               // Seconds
+  #define WATCH_TEMP_PERIOD  40               // Seconds
   #define WATCH_TEMP_INCREASE 2               // Degrees Celsius
 #endif
 
@@ -266,13 +266,13 @@
  * Thermal Protection parameters for the bed are just as above for hotends.
  */
 #if ENABLED(THERMAL_PROTECTION_BED)
-  #define THERMAL_PROTECTION_BED_PERIOD        20 // Seconds
+  #define THERMAL_PROTECTION_BED_PERIOD       180 // Seconds
   #define THERMAL_PROTECTION_BED_HYSTERESIS     2 // Degrees Celsius
 
   /**
    * As described above, except for the bed (M140/M190/M303).
    */
-  #define WATCH_BED_TEMP_PERIOD                60 // Seconds
+  #define WATCH_BED_TEMP_PERIOD               180 // Seconds
   #define WATCH_BED_TEMP_INCREASE               2 // Degrees Celsius
 #endif
 
@@ -280,7 +280,7 @@
  * Thermal Protection parameters for the heated chamber.
  */
 #if ENABLED(THERMAL_PROTECTION_CHAMBER)
-  #define THERMAL_PROTECTION_CHAMBER_PERIOD    20 // Seconds
+  #define THERMAL_PROTECTION_CHAMBER_PERIOD    60 // Seconds
   #define THERMAL_PROTECTION_CHAMBER_HYSTERESIS 2 // Degrees Celsius
 
   /**
@@ -496,7 +496,7 @@
  *
  * Define one or both of these to override the default 0-255 range.
  */
-//#define FAN_MIN_PWM 50
+#define FAN_MIN_PWM 50
 //#define FAN_MAX_PWM 128
 
 /**
@@ -540,7 +540,9 @@
  * Multiple extruders can be assigned to the same pin in which case
  * the fan will turn on when any selected extruder is above the threshold.
  */
-#define E0_AUTO_FAN_PIN -1
+// According to the new hardware schematic, suppose PC0 is used to connect the pipe fan, Configuration_adv.h #define E0_AUTO_FAN_PIN PC0,
+// When the pipe temperature is greater than EXTRUDER_AUTO_FAN_TEMPERATURE, the pipe fan is open
+#define E0_AUTO_FAN_PIN PC1
 #define E1_AUTO_FAN_PIN -1
 #define E2_AUTO_FAN_PIN -1
 #define E3_AUTO_FAN_PIN -1
@@ -766,7 +768,7 @@
 
   // Safety: The probe needs time to recognize the command.
   //         Minimum command delay (ms). Enable and increase if needed.
-  //#define BLTOUCH_DELAY 500
+  #define BLTOUCH_DELAY 350   // Creality enable delay for increase security and accuracy
 
   /**
    * Settings for BLTOUCH Classic 1.2, 1.3 or BLTouch Smart 1.0, 2.0, 2.2, 3.0, 3.1, and most clones:
@@ -808,7 +810,7 @@
    * This feature was designed for Deltabots with very fast Z moves; however, higher speed Cartesians
    * might be able to use it. If the machine can't raise Z fast enough the BLTouch may go into ALARM.
    */
-  //#define BLTOUCH_HS_MODE
+  #define BLTOUCH_HS_MODE
 
   // Safety: Enable voltage mode settings in the LCD menu.
   //#define BLTOUCH_LCD_VOLTAGE_MENU
@@ -907,8 +909,49 @@
 
 #endif
 
-// @section motion
 
+
+
+/**
+ * Input Shaping -- EXPERIMENTAL
+ *
+ * Zero Vibration (ZV) Input Shaping for X and/or Y movements.
+ *
+ * This option uses a lot of SRAM for the step buffer, which is related to the
+ * largest step rate possible for the shaped axes. If the build fails due to
+ * low SRAM the buffer size may be reduced by setting smaller values for
+ * DEFAULT_AXIS_STEPS_PER_UNIT and/or DEFAULT_MAX_FEEDRATE. Disabling
+ * ADAPTIVE_STEP_SMOOTHING and reducing the step rate for non-shaped axes may
+ * also reduce the buffer sizes. Runtime editing of max feedrate (M203) or
+ * resonant frequency (M593) may result in input shaping losing effectiveness
+ * during high speed movements to prevent buffer overruns.
+ *
+ * Tune with M593 D<factor> F<frequency>:
+ *
+ *  D<factor>    Set the zeta/damping factor. If axes (X, Y, etc.) are not specified, set for all axes.
+ *  F<frequency> Set the frequency. If axes (X, Y, etc.) are not specified, set for all axes.
+ *  T[map]       Input Shaping type, 0:ZV, 1:EI, 2:2H EI (not implemented yet)
+ *  X<1>         Set the given parameters only for the X axis.
+ *  Y<1>         Set the given parameters only for the Y axis.
+ */
+#if ENABLED(HIGH_SPEED)
+    #define INPUT_SHAPING_X
+    #define INPUT_SHAPING_Y
+  #if EITHER(INPUT_SHAPING_X, INPUT_SHAPING_Y)
+    #if ENABLED(INPUT_SHAPING_X)
+      #define SHAPING_FREQ_X  42//34.29  // (Hz) The default dominant resonant frequency on the X axis.
+      #define SHAPING_ZETA_X  0.15f     // Damping ratio of the X axis (range: 0.0 = no damping to 1.0 = critical damping).
+    #endif
+    #if ENABLED(INPUT_SHAPING_Y)
+      #define SHAPING_FREQ_Y  40//41.38    // (Hz) The default dominant resonant frequency on the Y axis.
+      #define SHAPING_ZETA_Y  0.15f    // Damping ratio of the Y axis (range: 0.0 = no damping to 1.0 = critical damping).
+    #endif
+    
+    // #define SHAPING_MIN_FREQ  20        // By default the minimum of the shaping frequencies. Override to affect SRAM usage.
+    // #define SHAPING_MAX_STEPRATE 10000  // By default the maximum total step rate of the shaped axes. Override to affect SRAM usage.
+    //#define SHAPING_MENU          // Add a menu to the LCD to set shaping parameters.
+  #endif
+#endif
 #define AXIS_RELATIVE_MODES { false, false, false, false }
 
 // Add a Duplicate option for well-separated conjoined nozzles
@@ -925,11 +968,11 @@
  * Set DISABLE_INACTIVE_? 'true' to shut down axis steppers after an idle period.
  * The Deactive Time can be overridden with M18 and M84. Set to 0 for No Timeout.
  */
-#define DEFAULT_STEPPER_DEACTIVE_TIME 120
-#define DISABLE_INACTIVE_X true
-#define DISABLE_INACTIVE_Y true
-#define DISABLE_INACTIVE_Z true  // Set 'false' if the nozzle could fall onto your printed part!
-#define DISABLE_INACTIVE_E true
+#define DEFAULT_STEPPER_DEACTIVE_TIME 1200
+#define DISABLE_INACTIVE_X false   // true  rock_20210909
+#define DISABLE_INACTIVE_Y false   // true  rock_20210909
+#define DISABLE_INACTIVE_Z false   // true  //Set 'false' if the nozzle could fall onto your printed part!
+#define DISABLE_INACTIVE_E false   // true
 
 // Default Minimum Feedrates for printing and travel moves
 #define DEFAULT_MINIMUMFEEDRATE       0.0     // (mm/s) Minimum feedrate. Set with M205 S.
@@ -1059,7 +1102,7 @@
  * vibration and surface artifacts. The algorithm adapts to provide the best possible step smoothing at the
  * lowest stepping frequencies.
  */
-//#define ADAPTIVE_STEP_SMOOTHING
+#define ADAPTIVE_STEP_SMOOTHING   // Creality Ender3v2 Config
 
 /**
  * Custom Microstepping
@@ -1145,8 +1188,9 @@
 // Change values more rapidly when the encoder is rotated faster
 #define ENCODER_RATE_MULTIPLIER
 #if ENABLED(ENCODER_RATE_MULTIPLIER)
-  #define ENCODER_10X_STEPS_PER_SEC   30  // (steps/s) Encoder rate for 10x speed
-  #define ENCODER_100X_STEPS_PER_SEC  80  // (steps/s) Encoder rate for 100x speed
+  #define ENCODER_5X_STEPS_PER_SEC    30  // Creality Ender3v2 Config
+  #define ENCODER_10X_STEPS_PER_SEC   80  // (steps/s) Encoder rate for 10x speed    // Creality Ender3v2 Config
+  #define ENCODER_100X_STEPS_PER_SEC 130  // (steps/s) Encoder rate for 100x speed   // Creality Ender3v2 Config
 #endif
 
 // Play a beep when the feedrate is changed from the Status Screen
@@ -1235,21 +1279,21 @@
   //#define LCD_DECIMAL_SMALL_XY
 
   // Add an 'M73' G-code to set the current percentage
-  //#define LCD_SET_PROGRESS_MANUALLY
+  #define LCD_SET_PROGRESS_MANUALLY
 
   // Show the E position (filament used) during printing
   //#define LCD_SHOW_E_TOTAL
 #endif
 
 #if EITHER(SDSUPPORT, LCD_SET_PROGRESS_MANUALLY) && ANY(HAS_MARLINUI_U8GLIB, HAS_MARLINUI_HD44780, IS_TFTGLCD_PANEL, EXTENSIBLE_UI)
-  //#define SHOW_REMAINING_TIME       // Display estimated time to completion
+  #define SHOW_REMAINING_TIME       // Display estimated time to completion
   #if ENABLED(SHOW_REMAINING_TIME)
-    //#define USE_M73_REMAINING_TIME  // Use remaining time from M73 command instead of estimation
-    //#define ROTATE_PROGRESS_DISPLAY // Display (P)rogress, (E)lapsed, and (R)emaining time
+    #define USE_M73_REMAINING_TIME  // Use remaining time from M73 command instead of estimation
+    #define ROTATE_PROGRESS_DISPLAY // Display (P)rogress, (E)lapsed, and (R)emaining time
   #endif
 
   #if EITHER(HAS_MARLINUI_U8GLIB, EXTENSIBLE_UI)
-    //#define PRINT_PROGRESS_SHOW_DECIMALS // Show progress with decimal digits
+    #define PRINT_PROGRESS_SHOW_DECIMALS // Show progress with decimal digits
   #endif
 
   #if EITHER(HAS_MARLINUI_HD44780, IS_TFTGLCD_PANEL)
@@ -1278,7 +1322,7 @@
 
   // The standard SD detect circuit reads LOW when media is inserted and HIGH when empty.
   // Enable this option and set to HIGH if your SD cards are incorrectly detected.
-  //#define SD_DETECT_STATE HIGH
+  // #define SD_DETECT_STATE HIGH
 
   //#define SD_IGNORE_AT_STARTUP            // Don't mount the SD card when starting up
   //#define SDCARD_READONLY                 // Read-only SD card (to save over 2K of flash)
@@ -1288,7 +1332,8 @@
   #define SD_PROCEDURE_DEPTH 1              // Increase if you need more nested M32 calls
 
   #define SD_FINISHED_STEPPERRELEASE true   // Disable steppers when SD Print is finished
-  #define SD_FINISHED_RELEASECOMMAND "M84"  // Use "M84XYE" to keep Z enabled so your bed stays in place
+
+  #define SD_FINISHED_RELEASECOMMAND "G1 X0 Y215\nM84"  // Use "M84XYE" to keep Z enabled so your bed stays in place
 
   // Reverse SD sort to show "more recent" files first, according to the card's FAT.
   // Since the FAT gets out of order with usage, SDCARD_SORT_ALPHA is recommended.
@@ -1303,7 +1348,7 @@
 
   //#define MEDIA_MENU_AT_TOP               // Force the media menu to be listed on the top of the main menu
 
-  #define EVENT_GCODE_SD_ABORT "G28XY"      // G-code to run on SD Abort Print (e.g., "G28XY" or "G27")
+  #define EVENT_GCODE_SD_ABORT " G28XY\nG1 X0 Y215\nM84" // G-code to run on SD Abort Print (e.g., "G28XY" or "G27")
 
   #if ENABLED(PRINTER_EVENT_LEDS)
     #define PE_LEDS_COMPLETED_TIME  (30*60) // (seconds) Time to keep the LED "done" color before restoring normal illumination
@@ -1317,11 +1362,11 @@
    * an option on the LCD screen to continue the print from the last-known
    * point in the file.
    */
-  //#define POWER_LOSS_RECOVERY
+  #define POWER_LOSS_RECOVERY
   #if ENABLED(POWER_LOSS_RECOVERY)
-    #define PLR_ENABLED_DEFAULT   false // Power Loss Recovery enabled by default. (Set with 'M413 Sn' & M500)
+    #define PLR_ENABLED_DEFAULT    true // Power Loss Recovery enabled by default. (Set with 'M413 Sn' & M500)
     //#define BACKUP_POWER_SUPPLY       // Backup power / UPS to move the steppers on power loss
-    //#define POWER_LOSS_ZRAISE       2 // (mm) Z axis raise on resume (on power loss with UPS)
+    #define POWER_LOSS_ZRAISE         5 // (mm) Z axis raise on resume (on power loss with UPS)
     //#define POWER_LOSS_PIN         44 // Pin to detect power loss. Set to -1 to disable default pin on boards without module.
     //#define POWER_LOSS_STATE     HIGH // State of pin indicating power loss
     //#define POWER_LOSS_PULLUP         // Set pullup / pulldown as appropriate for your sensor
@@ -1383,10 +1428,10 @@
   //#define UTF_FILENAME_SUPPORT
 
   // This allows hosts to request long names for files and folders with M33
-  //#define LONG_FILENAME_HOST_SUPPORT
+  #define LONG_FILENAME_HOST_SUPPORT  // Creality Active long file name support
 
   // Enable this option to scroll long filenames in the SD card menu
-  //#define SCROLL_LONG_FILENAMES
+  #define SCROLL_LONG_FILENAMES       // Creality Active scroll of large filenames
 
   // Leave the heaters on after Stop Print (not recommended!)
   //#define SD_ABORT_NO_COOLDOWN
@@ -1589,7 +1634,7 @@
 // Additional options for DGUS / DWIN displays
 //
 #if HAS_DGUS_LCD
-  #define LCD_SERIAL_PORT 3
+  #define LCD_SERIAL_PORT 2
   #define LCD_BAUDRATE 115200
 
   #define DGUS_RX_BUFFER_SIZE 128
@@ -1792,15 +1837,15 @@
  *
  * Warning: Does not respect endstops!
  */
-//#define BABYSTEPPING
+#define BABYSTEPPING
 #if ENABLED(BABYSTEPPING)
   //#define INTEGRATED_BABYSTEPPING         // EXPERIMENTAL integration of babystepping into the Stepper ISR
   //#define BABYSTEP_WITHOUT_HOMING
   //#define BABYSTEP_ALWAYS_AVAILABLE       // Allow babystepping at all times (not just during movement).
   //#define BABYSTEP_XY                     // Also enable X/Y Babystepping. Not supported on DELTA!
   #define BABYSTEP_INVERT_Z false           // Change if Z babysteps should go the other way
-  //#define BABYSTEP_MILLIMETER_UNITS       // Specify BABYSTEP_MULTIPLICATOR_(XY|Z) in mm instead of micro-steps
-  #define BABYSTEP_MULTIPLICATOR_Z  1       // (steps or mm) Steps or millimeter distance for each Z babystep
+  #define BABYSTEP_MILLIMETER_UNITS         // Specify BABYSTEP_MULTIPLICATOR_(XY|Z) in mm instead of micro-steps
+  #define BABYSTEP_MULTIPLICATOR_Z  0.01    // (steps or mm) Steps or millimeter distance for each Z babystep
   #define BABYSTEP_MULTIPLICATOR_XY 1       // (steps or mm) Steps or millimeter distance for each XY babystep
 
   //#define DOUBLECLICK_FOR_Z_BABYSTEPPING  // Double-click on the Status Screen for Z Babystepping.
@@ -1815,13 +1860,53 @@
 
   //#define BABYSTEP_DISPLAY_TOTAL          // Display total babysteps since last G28
 
-  //#define BABYSTEP_ZPROBE_OFFSET          // Combine M851 Z and Babystepping
+  #define BABYSTEP_ZPROBE_OFFSET            // Combine M851 Z and Babystepping
   #if ENABLED(BABYSTEP_ZPROBE_OFFSET)
     //#define BABYSTEP_HOTEND_Z_OFFSET      // For multiple hotends, babystep relative Z offsets
     //#define BABYSTEP_ZPROBE_GFX_OVERLAY   // Enable graphical overlay on Z-offset editor
   #endif
 #endif
 
+// Enable obtain the Z offset value 使能获取Z偏移值
+
+
+// #define USE_AUTOZ_TOOL
+#if ENABLED(USE_AUTOZ_TOOL) //一键对高第一种方式
+  #define AUTOZ_TOOL_X    27//32.5 - X_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the X direction of the nozzle is mm
+  #define AUTOZ_TOOL_Y    28//32.5 - Y_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the Y direction of the nozzle is mm
+  #define AUTOZ_TOOL_Z    -5
+  #define TOOL_BRUSH_X    -5                           // The x-direction difference between the center of the induction area and the center of the brush
+  #define TOOL_BRUSH_Y    50                           // The y-direction difference between the center of the induction area and the center of the brush
+  #define AUTOZ_BRUSH_X   AUTOZ_TOOL_X + TOOL_BRUSH_X
+  #define AUTOZ_BRUSH_Y   AUTOZ_TOOL_Y + TOOL_BRUSH_Y
+  #define AUTOZ_BRUSH_Z   0
+  #define AUTOZ_BRUSH_W   6.0                          // Nozzle brush size
+  #define AUTOZ_BRUSH_H   6.0
+  #define BETWEEN_Z       6                            // Safe distance from brush or automatic Z offset to tool sensing area
+  #define AUTOTOOL_RESULT                           // debug CRTouch probe info
+  #define AUTOTOOL_PRINT
+#endif
+#define USE_AUTOZ_TOOL_2  //一键对高第二种方式
+#if ENABLED(USE_AUTOZ_TOOL_2)  //20 31
+  #if ENABLED(PLATFORM_OFFSET)  //需要平台偏移
+  #define AUTOZ_TOOL_X    25//31 + X_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the X direction of the nozzle is mm
+  #define AUTOZ_TOOL_Y    28//35 + Y_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the Y direction of the nozzle is mm
+  #else
+   #define AUTOZ_TOOL_X   31 + X_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the X direction of the nozzle is mm
+  #define AUTOZ_TOOL_Y    35 + Y_MIN_POS 
+  #endif
+  #define AUTOZ_TOOL_Z    -5
+  #define TOOL_BRUSH_X    -5                           // The x-direction difference between the center of the induction area and the center of the brush
+  #define TOOL_BRUSH_Y    50                           // The y-direction difference between the center of the induction area and the center of the brush
+  #define AUTOZ_BRUSH_X   AUTOZ_TOOL_X + TOOL_BRUSH_X
+  #define AUTOZ_BRUSH_Y   AUTOZ_TOOL_Y + TOOL_BRUSH_Y
+  #define AUTOZ_BRUSH_Z   0
+  #define AUTOZ_BRUSH_W   6.0                          // Nozzle brush size
+  #define AUTOZ_BRUSH_H   6.0
+  #define BETWEEN_Z       6                            // Safe distance from brush or automatic Z offset to tool sensing area
+  #define AUTOTOOL_RESULT                           // debug CRTouch probe info
+  #define AUTOTOOL_PRINT
+#endif
 // @section extruder
 
 /**
@@ -1839,12 +1924,12 @@
  *
  * See https://marlinfw.org/docs/features/lin_advance.html for full instructions.
  */
-//#define LIN_ADVANCE
+// #define LIN_ADVANCE
 #if ENABLED(LIN_ADVANCE)
   //#define EXTRA_LIN_ADVANCE_K // Enable for second linear advance constants
-  #define LIN_ADVANCE_K 0.22    // Unit: mm compression per 1mm/s extruder speed
+  #define LIN_ADVANCE_K 0.2 //0.06    // Unit: mm compression per 1mm/s extruder speed
   //#define LA_DEBUG            // If enabled, this will generate debug information output over USB.
-  //#define EXPERIMENTAL_SCURVE // Enable this option to permit S-Curve Acceleration
+  #define EXPERIMENTAL_SCURVE // Enable this option to permit S-Curve Acceleration
 #endif
 
 // @section leveling
@@ -1882,10 +1967,15 @@
  * the probe to be unable to reach any points.
  */
 #if PROBE_SELECTED && !IS_KINEMATIC
-  //#define PROBING_MARGIN_LEFT PROBING_MARGIN
-  //#define PROBING_MARGIN_RIGHT PROBING_MARGIN
-  //#define PROBING_MARGIN_FRONT PROBING_MARGIN
-  //#define PROBING_MARGIN_BACK PROBING_MARGIN
+  #define PROBING_MARGIN_LEFT  PROBING_MARGIN
+  #define PROBING_MARGIN_RIGHT PROBING_MARGIN+10//结构件增加了一个抓皮带的，不能小于7 ——20230409——朱工。
+  #define PROBING_MARGIN_FRONT PROBING_MARGIN
+
+  #if ENABLED(WUHAN_CHENGE_PLATFORM)  //武汉改结构
+    #define PROBING_MARGIN_BACK  PROBING_MARGIN+10
+  #else  
+    #define PROBING_MARGIN_BACK  PROBING_MARGIN
+  #endif
 #endif
 
 #if EITHER(MESH_BED_LEVELING, AUTO_BED_LEVELING_UBL)
@@ -1904,7 +1994,7 @@
  * Repeatedly attempt G29 leveling until it succeeds.
  * Stop after G29_MAX_RETRIES attempts.
  */
-//#define G29_RETRY_AND_RECOVER
+#define G29_RETRY_AND_RECOVER
 #if ENABLED(G29_RETRY_AND_RECOVER)
   #define G29_MAX_RETRIES 3
   #define G29_HALT_ON_FAILURE
@@ -2023,7 +2113,7 @@
 #endif
 
 // Moves (or segments) with fewer steps than this will be joined with the next move
-#define MIN_STEPS_PER_SEGMENT 6
+#define MIN_STEPS_PER_SEGMENT 4
 
 /**
  * Minimum delay before and after setting the stepper DIR (in ns)
@@ -2038,7 +2128,7 @@
  *
  * Override the default value based on the driver type set in Configuration.h.
  */
-//#define MINIMUM_STEPPER_POST_DIR_DELAY 650
+#define MINIMUM_STEPPER_POST_DIR_DELAY  50000//20   //解决35774调节z轴补偿有小概率的出现Z轴电机失效的问题。 Rock_2023818
 //#define MINIMUM_STEPPER_PRE_DIR_DELAY 650
 
 /**
@@ -2084,9 +2174,9 @@
 #if BOTH(SDSUPPORT, DIRECT_STEPPING)
   #define BLOCK_BUFFER_SIZE  8
 #elif ENABLED(SDSUPPORT)
-  #define BLOCK_BUFFER_SIZE 16
+  #define BLOCK_BUFFER_SIZE 8
 #else
-  #define BLOCK_BUFFER_SIZE 16
+  #define BLOCK_BUFFER_SIZE 8
 #endif
 
 // @section serial
@@ -2102,7 +2192,7 @@
 // For debug-echo: 128 bytes for the optimal speed.
 // Other output doesn't need to be that speedy.
 // :[0, 2, 4, 8, 16, 32, 64, 128, 256]
-#define TX_BUFFER_SIZE 0
+#define TX_BUFFER_SIZE 32
 
 // Host Receive Buffer Size
 // Without XON/XOFF flow control (see SERIAL_XON_XOFF below) 32 bytes should be enough.
@@ -2140,7 +2230,7 @@
  * Currently handles M108, M112, M410, M876
  * NOTE: Not yet implemented for all platforms.
  */
-//#define EMERGENCY_PARSER
+#define EMERGENCY_PARSER
 
 /**
  * Realtime Reporting (requires EMERGENCY_PARSER)
@@ -2310,7 +2400,7 @@
  *
  * Enable PARK_HEAD_ON_PAUSE to add the G-code M125 Pause and Park.
  */
-//#define ADVANCED_PAUSE_FEATURE
+#define ADVANCED_PAUSE_FEATURE
 #if ENABLED(ADVANCED_PAUSE_FEATURE)
   #define PAUSE_PARK_RETRACT_FEEDRATE         60  // (mm/s) Initial retract feedrate.
   #define PAUSE_PARK_RETRACT_LENGTH            2  // (mm) Initial retract.
@@ -2331,7 +2421,7 @@
                                                   //   For direct drive, the full length of the nozzle.
   //#define ADVANCED_PAUSE_CONTINUOUS_PURGE       // Purge continuously up to the purge length until interrupted.
   #define ADVANCED_PAUSE_PURGE_FEEDRATE        3  // (mm/s) Extrude feedrate (after loading). Should be slower than load feedrate.
-  #define ADVANCED_PAUSE_PURGE_LENGTH         50  // (mm) Length to extrude after loading.
+  #define ADVANCED_PAUSE_PURGE_LENGTH          0  // (mm) Length to extrude after loading.
                                                   //   Set to 0 for manual extrusion.
                                                   //   Filament can be extruded repeatedly from the Filament Change menu
                                                   //   until extrusion is consistent, and to purge old filament.
@@ -2483,108 +2573,119 @@
  */
 #if HAS_TRINAMIC_CONFIG
 
-  #define HOLD_MULTIPLIER    0.5  // Scales down the holding current from run current
+  #define HOLD_MULTIPLIER    0.5 // Scales down the holding current from run current
 
   /**
    * Interpolate microsteps to 256
    * Override for each driver with <driver>_INTERPOLATE settings below
    */
-  #define INTERPOLATE      true
+  #define INTERPOLATE      false
 
   #if AXIS_IS_TMC(X)
-    #define X_CURRENT       800        // (mA) RMS current. Multiply by 1.414 for peak current.
+    #define X_CURRENT       550        // (mA) RMS current. Multiply by 1.414 for peak current.
     #define X_CURRENT_HOME  X_CURRENT  // (mA) RMS current for sensorless homing
-    #define X_MICROSTEPS     16        // 0..256
-    #define X_RSENSE          0.11
-    #define X_CHAIN_POS      -1        // -1..0: Not chained. 1: MCU MOSI connected. 2: Next in chain, ...
-    //#define X_INTERPOLATE  true      // Enable to override 'INTERPOLATE' for the X axis
+    #define X_MICROSTEPS    16        // 0..256 微步细分
+    #define X_RSENSE        0.15      //
+    #define X_CHAIN_POS     -1        // -1..0: Not chained. 1: MCU MOSI connected. 2: Next in chain, ...
+    #define X_INTERPOLATE  false//true      // Enable to override 'INTERPOLATE' for the X axis
+    #define X_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(X2)
     #define X2_CURRENT      800
     #define X2_CURRENT_HOME X2_CURRENT
-    #define X2_MICROSTEPS    X_MICROSTEPS
-    #define X2_RSENSE         0.11
-    #define X2_CHAIN_POS     -1
+    #define X2_MICROSTEPS   X_MICROSTEPS
+    #define X2_RSENSE       0.15
+    #define X2_CHAIN_POS    -1
     //#define X2_INTERPOLATE true
+    #define X2_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Y)
-    #define Y_CURRENT       800
+    #define Y_CURRENT       550  //电流大小影响温度
     #define Y_CURRENT_HOME  Y_CURRENT
-    #define Y_MICROSTEPS     16
-    #define Y_RSENSE          0.11
-    #define Y_CHAIN_POS      -1
+    #define Y_MICROSTEPS    16
+    #define Y_RSENSE        0.15
+    #define Y_CHAIN_POS     -1
     //#define Y_INTERPOLATE  true
+    #define Y_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Y2)
     #define Y2_CURRENT      800
     #define Y2_CURRENT_HOME Y2_CURRENT
-    #define Y2_MICROSTEPS    Y_MICROSTEPS
-    #define Y2_RSENSE         0.11
+    #define Y2_MICROSTEPS   Y_MICROSTEPS
+    #define Y2_RSENSE        0.15
     #define Y2_CHAIN_POS     -1
     //#define Y2_INTERPOLATE true
+    #define Y2_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Z)
-    #define Z_CURRENT       800
+    #define Z_CURRENT       800//550  //解决Z轴温度过高的问题 ——20230220
     #define Z_CURRENT_HOME  Z_CURRENT
     #define Z_MICROSTEPS     16
-    #define Z_RSENSE          0.11
+    #define Z_RSENSE         0.15
     #define Z_CHAIN_POS      -1
     //#define Z_INTERPOLATE  true
+    #define Z_HOLD_MULTIPLIER 1//HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Z2)
     #define Z2_CURRENT      800
     #define Z2_CURRENT_HOME Z2_CURRENT
-    #define Z2_MICROSTEPS    Z_MICROSTEPS
-    #define Z2_RSENSE         0.11
-    #define Z2_CHAIN_POS     -1
+    #define Z2_MICROSTEPS   Z_MICROSTEPS
+    #define Z2_RSENSE       0.15
+    #define Z2_CHAIN_POS    -1
     //#define Z2_INTERPOLATE true
+    #define Z2_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Z3)
     #define Z3_CURRENT      800
     #define Z3_CURRENT_HOME Z3_CURRENT
     #define Z3_MICROSTEPS    Z_MICROSTEPS
-    #define Z3_RSENSE         0.11
+    #define Z3_RSENSE         0.15
     #define Z3_CHAIN_POS     -1
     //#define Z3_INTERPOLATE true
+    #define Z3_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(Z4)
     #define Z4_CURRENT      800
     #define Z4_CURRENT_HOME Z4_CURRENT
-    #define Z4_MICROSTEPS    Z_MICROSTEPS
-    #define Z4_RSENSE         0.11
-    #define Z4_CHAIN_POS     -1
+    #define Z4_MICROSTEPS   Z_MICROSTEPS
+    #define Z4_RSENSE       0.15
+    #define Z4_CHAIN_POS    -1
     //#define Z4_INTERPOLATE true
+    #define Z4_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E0)
-    #define E0_CURRENT      800
-    #define E0_MICROSTEPS    16
-    #define E0_RSENSE         0.11
+    #define E0_CURRENT       600 //陈承轩——解决E轴电机温度过高的问题——20230220
+    #define E0_MICROSTEPS    16  //
+    #define E0_RSENSE        0.15
     #define E0_CHAIN_POS     -1
-    //#define E0_INTERPOLATE true
+    // #define E0_INTERPOLATE true
+    #define E0_HOLD_MULTIPLIER 1//HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E1)
     #define E1_CURRENT      800
     #define E1_MICROSTEPS   E0_MICROSTEPS
-    #define E1_RSENSE         0.11
-    #define E1_CHAIN_POS     -1
+    #define E1_RSENSE       0.15
+    #define E1_CHAIN_POS    -1
     //#define E1_INTERPOLATE true
+    #define E1_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E2)
     #define E2_CURRENT      800
     #define E2_MICROSTEPS   E0_MICROSTEPS
-    #define E2_RSENSE         0.11
+    #define E2_RSENSE         0.15
     #define E2_CHAIN_POS     -1
     //#define E2_INTERPOLATE true
+    #define E2_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E3)
@@ -2593,14 +2694,16 @@
     #define E3_RSENSE         0.11
     #define E3_CHAIN_POS     -1
     //#define E3_INTERPOLATE true
+    #define E3_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E4)
     #define E4_CURRENT      800
     #define E4_MICROSTEPS   E0_MICROSTEPS
-    #define E4_RSENSE         0.11
+    #define E4_RSENSE        0.11
     #define E4_CHAIN_POS     -1
     //#define E4_INTERPOLATE true
+    #define E4_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E5)
@@ -2609,6 +2712,7 @@
     #define E5_RSENSE         0.11
     #define E5_CHAIN_POS     -1
     //#define E5_INTERPOLATE true
+    #define E5_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E6)
@@ -2617,6 +2721,7 @@
     #define E6_RSENSE         0.11
     #define E6_CHAIN_POS     -1
     //#define E6_INTERPOLATE true
+    #define E6_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   #if AXIS_IS_TMC(E7)
@@ -2625,6 +2730,7 @@
     #define E7_RSENSE         0.11
     #define E7_CHAIN_POS     -1
     //#define E7_INTERPOLATE true
+    #define E7_HOLD_MULTIPLIER HOLD_MULTIPLIER 
   #endif
 
   /**
@@ -2669,15 +2775,20 @@
    * Set *_SERIAL_TX_PIN and *_SERIAL_RX_PIN to match for all drivers
    * on the same serial port, either here or in your board's pins file.
    */
-  //#define  X_SLAVE_ADDRESS 0
-  //#define  Y_SLAVE_ADDRESS 0
-  //#define  Z_SLAVE_ADDRESS 0
+  // #define X_SLAVE_ADDRESS 0x00
+  // #define Y_SLAVE_ADDRESS 0x01
+  // #define Z_SLAVE_ADDRESS 0x02
+  // #define E0_SLAVE_ADDRESS 0x03
+  #define X_SLAVE_ADDRESS 0x03
+  #define Y_SLAVE_ADDRESS 0x03
+  #define Z_SLAVE_ADDRESS 0x03
+  #define E0_SLAVE_ADDRESS 0x03
   //#define X2_SLAVE_ADDRESS 0
   //#define Y2_SLAVE_ADDRESS 0
   //#define Z2_SLAVE_ADDRESS 0
   //#define Z3_SLAVE_ADDRESS 0
   //#define Z4_SLAVE_ADDRESS 0
-  //#define E0_SLAVE_ADDRESS 0
+  
   //#define E1_SLAVE_ADDRESS 0
   //#define E2_SLAVE_ADDRESS 0
   //#define E3_SLAVE_ADDRESS 0
@@ -2699,6 +2810,7 @@
    * Use Trinamic's ultra quiet stepping mode.
    * When disabled, Marlin will use spreadCycle stepping mode.
    */
+  //关闭静音模式，使用性能模式。 //rock_20230315
   #define STEALTHCHOP_XY
   #define STEALTHCHOP_Z
   #define STEALTHCHOP_E
@@ -2718,16 +2830,16 @@
    * Define your own with:
    * { <off_time[1..15]>, <hysteresis_end[-3..12]>, hysteresis_start[1..8] }
    */
-  #define CHOPPER_TIMING CHOPPER_DEFAULT_12V        // All axes (override below)
-  //#define CHOPPER_TIMING_X  CHOPPER_TIMING        // For X Axes (override below)
+  //#define CHOPPER_TIMING CHOPPER_DEFAULT_24V      // All axes (override below)
+  #define CHOPPER_TIMING_X  USER_X_24V              // For X Axes (override below)
   //#define CHOPPER_TIMING_X2 CHOPPER_TIMING_X
-  //#define CHOPPER_TIMING_Y  CHOPPER_TIMING        // For Y Axes (override below)
+  #define CHOPPER_TIMING_Y  USER_Y_24V              // For Y Axes (override below)
   //#define CHOPPER_TIMING_Y2 CHOPPER_TIMING_Y
-  //#define CHOPPER_TIMING_Z  CHOPPER_TIMING        // For Z Axes (override below)
+  #define CHOPPER_TIMING_Z  USER_Z_24V              // For Z Axes (override below)
   //#define CHOPPER_TIMING_Z2 CHOPPER_TIMING_Z
   //#define CHOPPER_TIMING_Z3 CHOPPER_TIMING_Z
   //#define CHOPPER_TIMING_Z4 CHOPPER_TIMING_Z
-  //#define CHOPPER_TIMING_E  CHOPPER_TIMING        // For Extruders (override below)
+  #define CHOPPER_TIMING_E  CHOPPER_DEFAULT_24V     // For Extruders (override below)
   //#define CHOPPER_TIMING_E1 CHOPPER_TIMING_E
   //#define CHOPPER_TIMING_E2 CHOPPER_TIMING_E
   //#define CHOPPER_TIMING_E3 CHOPPER_TIMING_E
@@ -2762,7 +2874,7 @@
    * STEALTHCHOP_(XY|Z|E) must be enabled to use HYBRID_THRESHOLD.
    * M913 X/Y/Z/E to live tune the setting
    */
-  //#define HYBRID_THRESHOLD
+  #define HYBRID_THRESHOLD
 
   #define X_HYBRID_THRESHOLD     100  // [mm/s]
   #define X2_HYBRID_THRESHOLD    100

@@ -114,11 +114,13 @@
  * M42  - Change pin status via gcode: M42 P<pin> S<value>. LED pin assumed if P is omitted. (Requires DIRECT_PIN_CONTROL)
  * M43  - Display pin status, watch pins for changes, watch endstops & toggle LED, Z servo probe test, toggle pins
  * M48  - Measure Z Probe repeatability: M48 P<points> X<pos> Y<pos> V<level> E<engage> L<legs> S<chizoid>. (Requires Z_MIN_PROBE_REPEATABILITY_TEST)
+ * M72  - Cloud print filename;
  * M73  - Set the progress percentage. (Requires LCD_SET_PROGRESS_MANUALLY)
  * M75  - Start the print job timer.
  * M76  - Pause the print job timer.
  * M77  - Stop the print job timer.
  * M78  - Show statistical information about the print jobs. (Requires PRINTCOUNTER)
+ * M79  - Cloud print statistics.S0:cloud connect; S1:cloud print start; S2:cloud print pause; S3:cloud print resume; S4:cloud print stop; S5:cloud print complete
  * M80  - Turn on Power Supply. (Requires PSU_CONTROL)
  * M81  - Turn off Power Supply. (Requires PSU_CONTROL)
  * M82  - Set E codes absolute (default).
@@ -279,6 +281,8 @@
  * M916 - L6470 tuning: Increase KVAL_HOLD until thermal warning. (Requires at least one _DRIVER_TYPE L6470)
  * M917 - L6470 tuning: Find minimum current thresholds. (Requires at least one _DRIVER_TYPE L6470)
  * M918 - L6470 tuning: Increase speed until max or error. (Requires at least one _DRIVER_TYPE L6470)
+ * M930 - Wi-Fi ON/OFF status.
+ * M936 - OTA update firmware.
  * M951 - Set Magnetic Parking Extruder parameters. (Requires MAGNETIC_PARKING_EXTRUDER)
  * M7219 - Control Max7219 Matrix LEDs. (Requires MAX7219_GCODE)
  *
@@ -296,6 +300,7 @@
  * M995 - Touch screen calibration for TFT display
  * M997 - Perform in-application firmware update
  * M999 - Restart after being stopped by error
+ * M8015 - One key to obtain the Z offset value
  * D... - Custom Development G-code. Add hooks to 'gcode_D.cpp' for developers to test features. (Requires MARLIN_DEV_MODE)
  *
  * "T" Codes
@@ -306,6 +311,7 @@
 #include "../inc/MarlinConfig.h"
 #include "parser.h"
 
+
 #if ENABLED(I2C_POSITION_ENCODERS)
   #include "../feature/encoder_i2c.h"
 #endif
@@ -313,7 +319,12 @@
 #if IS_SCARA || defined(G0_FEEDRATE)
   #define HAS_FAST_MOVES 1
 #endif
-
+#if ENABLED(USE_AUTOZ_TOOL)
+#include "../module/PressLeveled.h"
+#endif
+#if ENABLED(USE_AUTOZ_TOOL_2)
+#include "../module/AutoOffset.h"
+#endif
 enum AxisRelative : uint8_t { REL_X, REL_Y, REL_Z, REL_E, E_MODE_ABS, E_MODE_REL };
 
 extern const char G28_STR[];
@@ -333,11 +344,13 @@ public:
   static inline void set_relative_mode(const bool rel) {
     axis_relative = rel ? _BV(REL_X) | _BV(REL_Y) | _BV(REL_Z) | _BV(REL_E) : 0;
   }
-  static inline void set_e_relative() {
+  static inline void set_e_relative() 
+  {
     CBI(axis_relative, E_MODE_ABS);
     SBI(axis_relative, E_MODE_REL);
   }
-  static inline void set_e_absolute() {
+  static inline void set_e_absolute() 
+  {
     CBI(axis_relative, E_MODE_REL);
     SBI(axis_relative, E_MODE_ABS);
   }
@@ -420,6 +433,8 @@ public:
   static void dwell(millis_t time);
 
 private:
+
+  friend class MarlinSettings;
 
   #if ENABLED(MARLIN_DEV_MODE)
     static void D(const int16_t dcode);
@@ -618,6 +633,8 @@ private:
     static void M48();
   #endif
 
+  static void M72();
+
   #if ENABLED(LCD_SET_PROGRESS_MANUALLY)
     static void M73();
   #endif
@@ -629,6 +646,8 @@ private:
   #if ENABLED(PRINTCOUNTER)
     static void M78();
   #endif
+
+  static void M79();
 
   #if ENABLED(PSU_CONTROL)
     static void M80();
@@ -649,7 +668,12 @@ private:
 
   #if HAS_EXTRUDERS
     static void M104_M109(const bool isM109);
-    FORCE_INLINE static void M104() { M104_M109(false); }
+    // Because the power is limited to 200W, it must be heated separately and wait for extruder target temp
+    #if ENABLED(USE_SWITCH_POWER_200W)
+     FORCE_INLINE static void M104() { M104_M109(true); }
+    #else
+     FORCE_INLINE static void M104() { M104_M109(false); }  //200w电源改成了额350w电源不需要限制加热 20230515
+    #endif
     FORCE_INLINE static void M109() { M104_M109(true); }
   #endif
 
@@ -705,7 +729,12 @@ private:
 
   #if HAS_HEATED_BED
     static void M140_M190(const bool isM190);
-    FORCE_INLINE static void M140() { M140_M190(false); }
+    // Because the power is limited to 200W, it must be heated separately and wait for hotbed target temp
+    #if ENABLED(USE_SWITCH_POWER_200W)
+      FORCE_INLINE static void M140() { M140_M190(true); }
+    #else
+      FORCE_INLINE static void M140() { M140_M190(false); }
+    #endif
     FORCE_INLINE static void M190() { M140_M190(true); }
   #endif
 
@@ -956,6 +985,11 @@ private:
     static void M575();
   #endif
 
+ #if HAS_SHAPING
+    static void M593();
+    static void M593_report(const bool forReplay=true);
+  #endif
+  
   #if ENABLED(ADVANCED_PAUSE_FEATURE)
     static void M600();
     static void M603();
@@ -1061,6 +1095,11 @@ private:
     static void M928();
   #endif
 
+  #if ENABLED(HAS_CREALITY_WIFI)
+    static void M930();
+    static void M936();
+  #endif
+
   #if ENABLED(MAGNETIC_PARKING_EXTRUDER)
     static void M951();
   #endif
@@ -1103,6 +1142,10 @@ private:
 
   #if ENABLED(CONTROLLER_FAN_EDITABLE)
     static void M710();
+  #endif
+
+  #if ANY(USE_AUTOZ_TOOL,USE_AUTOZ_TOOL_2)
+    static void M8015();
   #endif
 
   static void T(const int8_t tool_index);

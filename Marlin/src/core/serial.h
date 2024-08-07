@@ -277,6 +277,8 @@ void serialprintPGM(PGM_P str);
 
 #define SERIAL_ECHO_SP(C)           serial_spaces(C)
 
+#define PRINT_LOG(V...)      do{ SERIAL_ECHO_START(); SERIAL_ECHOPAIR( " ", __FUNCTION__, ": ", __LINE__, ": "); SERIAL_ECHOPAIR(V); SERIAL_EOL();}while(0)
+
 #define SERIAL_ECHO_TERNARY(TF, PRE, ON, OFF, POST) serial_ternary(TF, PSTR(PRE), PSTR(ON), PSTR(OFF), PSTR(POST))
 
 #if SERIAL_FLOAT_PRECISION

@@ -39,11 +39,28 @@
 #define DWIN_SCROLL_UP   2
 #define DWIN_SCROLL_DOWN 3
 
-#define DWIN_WIDTH  272
-#define DWIN_HEIGHT 480
+// #define DWIN_CREALITY_480_LCD
+#define DWIN_CREALITY_320_LCD
+
+#if ENABLED(DWIN_CREALITY_480_LCD)
+  #define DWIN_WIDTH  272
+  #define DWIN_HEIGHT 480
+
+  #define STATUS_Y        360
+  #define BLUELINE_X      256
+  #define VALUERANGE_X    216
+#elif ENABLED(DWIN_CREALITY_320_LCD)
+  #define DWIN_WIDTH  240
+  #define DWIN_HEIGHT 320
+
+  #define STATUS_Y        320//240
+  #define BLUELINE_X      232
+  #define VALUERANGE_X    192
+#endif
 
 /*-------------------------------------- System variable function --------------------------------------*/
-
+void Draw_Curve_Set(uint8_t line_wide,uint8_t step_x,uint16_t step_y,uint32_t colour);
+void Draw_Curve_Data(uint8_t index,int16_t* temp_data);
 // Handshake (1: Success, 0: Fail)
 bool DWIN_Handshake(void);
 
@@ -52,7 +69,7 @@ void DWIN_Startup(void);
 
 // Set the backlight luminance
 //  luminance: (0x00-0xFF)
-void DWIN_Backlight_SetLuminance(const uint8_t luminance);
+extern void DWIN_Backlight_SetLuminance(const uint8_t luminance);
 
 // Set screen display direction
 //  dir: 0=0°, 1=90°, 2=180°, 3=270°
@@ -103,6 +120,8 @@ inline void DWIN_Draw_VLine(uint16_t color, uint16_t xStart, uint16_t yStart, ui
 void DWIN_Draw_Rectangle(uint8_t mode, uint16_t color,
                          uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd);
 
+void DWIN_Set_Color(uint16_t FC,uint16_t BC);
+void  DWIN_Set_24_Color(uint32_t BC);
 // Draw a box
 //  mode: 0=frame, 1=fill, 2=XOR fill
 //  color: Rectangle color
@@ -153,7 +172,8 @@ inline void DWIN_Draw_String(bool widthAdjust, bool bShow, uint8_t size, uint16_
 //  value: Integer value
 void DWIN_Draw_IntValue(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t size, uint16_t color,
                           uint16_t bColor, uint8_t iNum, uint16_t x, uint16_t y, uint16_t value);
-
+void DWIN_Draw_IntValue_N0SPACE(uint8_t bShow, bool zeroFill, uint8_t zeroMode, uint8_t size, uint16_t color,
+                          uint16_t bColor, uint8_t iNum, uint16_t x, uint16_t y, uint16_t value);
 // Draw a floating point number
 //  bShow: true=display background color; false=don't display background color
 //  zeroFill: true=zero fill; false=no zero fill
@@ -179,6 +199,7 @@ void DWIN_JPG_ShowAndCache(const uint8_t id);
 //  picID: Icon ID
 //  x/y: Upper-left point
 void DWIN_ICON_Show(uint8_t libID, uint8_t picID, uint16_t x, uint16_t y);
+void DWIN_ICON_Not_Filter_Show(uint8_t libID, uint8_t picID, uint16_t x, uint16_t y);
 
 // Unzip the JPG picture to a virtual display area
 //  n: Cache index
@@ -211,3 +232,6 @@ void DWIN_ICON_Animation(uint8_t animID, bool animate, uint8_t libID, uint8_t pi
 // Animation Control
 //  state: 16 bits, each bit is the state of an animation id
 void DWIN_ICON_AnimationControl(uint16_t state);
+
+void DWIN_ICON_SHOW_SRAM(uint16_t x,uint16_t y,uint16_t addr);
+void DWIN_SHOW_MAIN_PIC();

@@ -25,6 +25,9 @@
  */
 
 #include "../inc/MarlinConfigPre.h"
+#include "../module/stepper.h"
+
+#include "../lcd/dwin/e3v2/dwin.h"
 
 #if ENABLED(POWER_LOSS_RECOVERY)
 
@@ -53,6 +56,8 @@ uint32_t PrintJobRecovery::cmd_sdpos, // = 0
 #include "../module/printcounter.h"
 #include "../module/temperature.h"
 #include "../core/serial.h"
+
+#include "../libs/BL24CXX.h"
 
 #if ENABLED(FWRETRACT)
   #include "fwretract.h"
@@ -104,9 +109,11 @@ void PrintJobRecovery::changed() {
  *
  * If a saved state exists send 'M1000 S' to initiate job recovery.
  */
-void PrintJobRecovery::check() {
+void PrintJobRecovery::check()
+{
   //if (!card.isMounted()) card.mount();
-  if (card.isMounted()) {
+  if (card.isMounted())
+  {
     load();
     if (!valid()) return cancel();
     queue.inject_P(PSTR("M1000S"));
@@ -154,7 +161,7 @@ void PrintJobRecovery::save(const bool force/*=false*/, const float zraise/*=POW
   #endif
 
   #ifndef POWER_LOSS_MIN_Z_CHANGE
-    #define POWER_LOSS_MIN_Z_CHANGE 0.05  // Vase-mode-friendly out of the box
+    #define POWER_LOSS_MIN_Z_CHANGE 0.2   // 0.05   // Vase-mode-friendly out of the box
   #endif
 
   // Did Z change since the last call?
@@ -218,7 +225,7 @@ void PrintJobRecovery::save(const bool force/*=false*/, const float zraise/*=POW
       COPY(info.retract, fwretract.current_retract);
       info.retract_hop = fwretract.current_hop;
     #endif
-
+    info.feedrate_percentage = feedrate_percentage;
     // Elapsed print job time
     info.print_job_elapsed = print_job_timer.duration();
 
@@ -229,7 +236,11 @@ void PrintJobRecovery::save(const bool force/*=false*/, const float zraise/*=POW
     info.flag.dryrun = !!(marlin_debug_flags & MARLIN_DEBUG_DRYRUN);
     info.flag.allow_cold_extrusion = TERN0(PREVENT_COLD_EXTRUSION, thermalManager.allow_cold_extrude);
 
+    info.sd_printing_flag = true;
+    // millis_t start = millis();
     write();
+    // millis_t end = millis();
+    // SERIAL_ECHOLNPAIR("pl write time:", end - start);  //rock_20230310 解决花瓶模式打印有麻点的问题。
   }
 }
 
@@ -237,7 +248,8 @@ void PrintJobRecovery::save(const bool force/*=false*/, const float zraise/*=POW
 
   #if ENABLED(BACKUP_POWER_SUPPLY)
 
-    void PrintJobRecovery::retract_and_lift(const_float_t zraise) {
+    void PrintJobRecovery::retract_and_lift(const_float_t zraise)
+   {
       #if POWER_LOSS_RETRACT_LEN || POWER_LOSS_ZRAISE
 
         gcode.set_relative_mode(true);  // Use relative coordinates
@@ -323,37 +335,46 @@ void PrintJobRecovery::write() {
 /**
  * Resume the saved print job
  */
-void PrintJobRecovery::resume() {
-
+void PrintJobRecovery::resume()
+{
   char cmd[MAX_CMD_SIZE+16], str_1[16], str_2[16];
-
+  // Restore all hotend temperatures
   const uint32_t resume_sdpos = info.sdpos; // Get here before the stepper ISR overwrites it
 
   // Apply the dry-run flag if enabled
-  if (info.flag.dryrun) marlin_debug_flags |= MARLIN_DEBUG_DRYRUN;
+  // if (info.flag.dryrun) marlin_debug_flags |= MARLIN_DEBUG_DRYRUN;
 
   // Restore cold extrusion permission
-  TERN_(PREVENT_COLD_EXTRUSION, thermalManager.allow_cold_extrude = info.flag.allow_cold_extrusion);
+  // TERN_(PREVENT_COLD_EXTRUSION, thermalManager.allow_cold_extrude = info.flag.allow_cold_extrusion);
 
   #if HAS_LEVELING
     // Make sure leveling is off before any G92 and G28
-    gcode.process_subcommands_now_P(PSTR("M420 S0 Z0"));
+    gcode.process_subcommands_now_P(PSTR("M420 S0"));
   #endif
 
   #if HAS_HEATED_BED
     const celsius_t bt = info.target_temperature_bed;
-    if (bt) {
+    if (bt)
+    {
       // Restore the bed temperature
       sprintf_P(cmd, PSTR("M190S%i"), bt);
       gcode.process_subcommands_now(cmd);
+    }
+
+    if(HMI_flag.disallow_recovery_flag)
+    {
+      HMI_flag.disallow_recovery_flag = false;
+      return;
     }
   #endif
 
   // Heat hotend enough to soften material
   #if HAS_HOTEND
-    HOTEND_LOOP() {
+    HOTEND_LOOP()
+    {
       const celsius_t et = _MAX(info.target_temperature[e], 180);
-      if (et) {
+      if (et)
+      {
         #if HAS_MULTI_HOTEND
           sprintf_P(cmd, PSTR("T%iS"), e);
           gcode.process_subcommands_now(cmd);
@@ -361,6 +382,12 @@ void PrintJobRecovery::resume() {
         sprintf_P(cmd, PSTR("M109S%i"), et);
         gcode.process_subcommands_now(cmd);
       }
+    }
+
+    if(HMI_flag.disallow_recovery_flag)
+    {
+      HMI_flag.disallow_recovery_flag = false;
+      return;
     }
   #endif
 
@@ -374,7 +401,7 @@ void PrintJobRecovery::resume() {
   //
 
   gcode.process_subcommands_now_P(PSTR("G92.9E0")); // Reset E to 0
-
+  feedrate_percentage=info.feedrate_percentage;
   #if Z_HOME_TO_MAX
 
     float z_now = z_raised;
@@ -385,7 +412,11 @@ void PrintJobRecovery::resume() {
             "G1Z%sF1200"  // Move Z down to (raised) height
           ), dtostrf(z_now, 1, 3, str_1));
     gcode.process_subcommands_now(cmd);
-
+    if(HMI_flag.disallow_recovery_flag)
+    {
+      HMI_flag.disallow_recovery_flag = false;
+      return;
+    }
   #else
 
     #if ENABLED(POWER_LOSS_RECOVER_ZHOME) && defined(POWER_LOSS_ZHOME_POS)
@@ -394,8 +425,8 @@ void PrintJobRecovery::resume() {
       #define HOME_XY_ONLY 1
     #endif
 
-    float z_now = info.flag.raised ? z_raised : z_print;
-
+    // float z_now = info.flag.raised ? z_raised : z_print;
+    float z_now = z_print;
     // Reset E to 0 and set Z to the real position
     #if HOME_XY_ONLY
       sprintf_P(cmd, PSTR("G92.9Z%s"), dtostrf(z_now, 1, 3, str_1));
@@ -403,7 +434,8 @@ void PrintJobRecovery::resume() {
     #endif
 
     // Does Z need to be raised now? It should be raised before homing XY.
-    if (z_raised > z_now) {
+    if (z_raised > z_now) 
+    {
       z_now = z_raised;
       sprintf_P(cmd, PSTR("G1Z%sF600"), dtostrf(z_now, 1, 3, str_1));
       gcode.process_subcommands_now(cmd);
@@ -419,87 +451,101 @@ void PrintJobRecovery::resume() {
     constexpr xy_pos_t p = POWER_LOSS_ZHOME_POS;
     sprintf_P(cmd, PSTR("G1X%sY%sF1000\nG28Z"), dtostrf(p.x, 1, 3, str_1), dtostrf(p.y, 1, 3, str_2));
     gcode.process_subcommands_now(cmd);
-  #endif
 
+    if(HMI_flag.disallow_recovery_flag)
+    {
+      HMI_flag.disallow_recovery_flag = false;
+      return;
+    }
+  #endif
   // Mark all axes as having been homed (no effect on current_position)
   set_all_homed();
 
-  #if HAS_LEVELING
-    // Restore Z fade and possibly re-enable bed leveling compensation.
-    // Leveling may already be enabled due to the ENABLE_LEVELING_AFTER_G28 option.
-    // TODO: Add a G28 parameter to leave leveling disabled.
-    sprintf_P(cmd, PSTR("M420S%cZ%s"), '0' + (char)info.flag.leveling, dtostrf(info.fade, 1, 1, str_1));
-    gcode.process_subcommands_now(cmd);
+  // #if HAS_LEVELING
+  //   // Restore Z fade and possibly re-enable bed leveling compensation.
+  //   // Leveling may already be enabled due to the ENABLE_LEVELING_AFTER_G28 option.
+  //   // TODO: Add a G28 parameter to leave leveling disabled.
+  //   sprintf_P(cmd, PSTR("M420S%cZ%s"), '0' + (char)info.flag.leveling, dtostrf(info.fade, 1, 1, str_1));
+  //   gcode.process_subcommands_now(cmd);
 
-    #if HOME_XY_ONLY
-      // The physical Z was adjusted at power-off so undo the M420S1 correction to Z with G92.9.
-      sprintf_P(cmd, PSTR("G92.9Z%s"), dtostrf(z_now, 1, 1, str_1));
-      gcode.process_subcommands_now(cmd);
-    #endif
-  #endif
+  //   // #if HOME_XY_ONLY
+  //     // Z-axis coordinates will be restored before automatic leveling is turned on, and will not be restored after automatic leveling
+  //     // The physical Z was adjusted at power-off so undo the M420S1 correction to Z with G92.9.
+  //     // sprintf_P(cmd, PSTR("G92.9Z%s"), dtostrf(z_now, 1, 1, str_1));
+  //     // gcode.process_subcommands_now(cmd);
+  //   // #endif
+  // #endif
 
   #if ENABLED(POWER_LOSS_RECOVER_ZHOME)
     // Z was homed down to the bed, so move up to the raised height.
     z_now = z_raised;
     sprintf_P(cmd, PSTR("G1Z%sF600"), dtostrf(z_now, 1, 3, str_1));
     gcode.process_subcommands_now(cmd);
+
+    if(HMI_flag.disallow_recovery_flag)
+    {
+      HMI_flag.disallow_recovery_flag = false;
+      return;
+    }
   #endif
 
   // Recover volumetric extrusion state
   #if DISABLED(NO_VOLUMETRICS)
     #if HAS_MULTI_EXTRUDER
-      for (int8_t e = 0; e < EXTRUDERS; e++) {
+      for (int8_t e = 0; e < EXTRUDERS; e++)
+      {
         sprintf_P(cmd, PSTR("M200T%iD%s"), e, dtostrf(info.filament_size[e], 1, 3, str_1));
         gcode.process_subcommands_now(cmd);
       }
-      if (!info.flag.volumetric_enabled) {
+      if (!info.flag.volumetric_enabled)
+      {
         sprintf_P(cmd, PSTR("M200T%iD0"), info.active_extruder);
         gcode.process_subcommands_now(cmd);
+
+        if(HMI_flag.disallow_recovery_flag)
+        {
+          HMI_flag.disallow_recovery_flag = false;
+          return;
+        }
       }
     #else
-      if (info.flag.volumetric_enabled) {
+      if (info.flag.volumetric_enabled)
+      {
         sprintf_P(cmd, PSTR("M200D%s"), dtostrf(info.filament_size[0], 1, 3, str_1));
         gcode.process_subcommands_now(cmd);
+        if(HMI_flag.disallow_recovery_flag)
+        {
+          HMI_flag.disallow_recovery_flag = false;
+          return;
+        }
       }
     #endif
   #endif
 
-  // Restore all hotend temperatures
-  #if HAS_HOTEND
-    HOTEND_LOOP() {
-      const celsius_t et = info.target_temperature[e];
-      if (et) {
-        #if HAS_MULTI_HOTEND
-          sprintf_P(cmd, PSTR("T%iS"), e);
-          gcode.process_subcommands_now(cmd);
-        #endif
-        sprintf_P(cmd, PSTR("M109S%i"), et);
-        gcode.process_subcommands_now(cmd);
-      }
-    }
-  #endif
-
-  // Restore the previously active tool (with no_move)
-  #if HAS_MULTI_EXTRUDER || HAS_MULTI_HOTEND
-    sprintf_P(cmd, PSTR("T%i S"), info.active_extruder);
-    gcode.process_subcommands_now(cmd);
-  #endif
-
   // Restore print cooling fan speeds
   #if HAS_FAN
-    FANS_LOOP(i) {
+    FANS_LOOP(i)
+    {
       const int f = info.fan_speed[i];
-      if (f) {
+      if (f)
+      {
         sprintf_P(cmd, PSTR("M106P%iS%i"), i, f);
         gcode.process_subcommands_now(cmd);
+        if(HMI_flag.disallow_recovery_flag)
+        {
+          HMI_flag.disallow_recovery_flag = false;
+          return;
+        }
       }
     }
   #endif
 
   // Restore retract and hop state from an active `G10` command
   #if ENABLED(FWRETRACT)
-    LOOP_L_N(e, EXTRUDERS) {
-      if (info.retract[e] != 0.0) {
+    LOOP_L_N(e, EXTRUDERS)
+    {
+      if (info.retract[e] != 0.0)
+      {
         fwretract.current_retract[e] = info.retract[e];
         fwretract.retracted[e] = true;
       }
@@ -526,13 +572,28 @@ void PrintJobRecovery::resume() {
     gcode.process_subcommands_now_P(PSTR("G12"));
   #endif
 
+  if(HMI_flag.disallow_recovery_flag)
+  {
+    HMI_flag.disallow_recovery_flag = false;
+    return;
+  }
+  gcode.process_subcommands_now_P(PSTR("M420 S0"));
+  // SERIAL_ECHO_MSG(">>> G1XY -> z: ", current_position.z);
+  // SERIAL_ECHO_START();
+  // SERIAL_ECHOPGM("Bed Leveling ");
+  // serialprintln_onoff(planner.leveling_active);
+
   // Move back over to the saved XY
   sprintf_P(cmd, PSTR("G1X%sY%sF3000"),
     dtostrf(info.current_position.x, 1, 3, str_1),
     dtostrf(info.current_position.y, 1, 3, str_2)
   );
   gcode.process_subcommands_now(cmd);
-
+  if(HMI_flag.disallow_recovery_flag)
+  {
+    HMI_flag.disallow_recovery_flag = false;
+    return;
+  }
   // Move back down to the saved Z for printing
   sprintf_P(cmd, PSTR("G1Z%sF600"), dtostrf(z_print, 1, 3, str_1));
   gcode.process_subcommands_now(cmd);
@@ -552,6 +613,14 @@ void PrintJobRecovery::resume() {
     LOOP_LINEAR_AXES(i) update_workspace_offset((AxisEnum)i);
   #endif
 
+  #if HAS_LEVELING
+    // Restore Z fade and possibly re-enable bed leveling compensation.
+    // Leveling may already be enabled due to the ENABLE_LEVELING_AFTER_G28 option.
+    // TODO: Add a G28 parameter to leave leveling disabled.
+    sprintf_P(cmd, PSTR("M420S%cZ%s"), '0' + (char)info.flag.leveling, dtostrf(info.fade, 1, 1, str_1));
+    gcode.process_subcommands_now(cmd);
+  #endif
+
   // Relative axis modes
   gcode.axis_relative = info.axis_relative;
 
@@ -567,8 +636,17 @@ void PrintJobRecovery::resume() {
   char *fn = info.sd_filename;
   sprintf_P(cmd, M23_STR, fn);
   gcode.process_subcommands_now(cmd);
+
+  if(HMI_flag.disallow_recovery_flag)
+  {
+    HMI_flag.disallow_recovery_flag = false;
+    return;
+  }
+
   sprintf_P(cmd, PSTR("M24S%ldT%ld"), resume_sdpos, info.print_job_elapsed);
   gcode.process_subcommands_now(cmd);
+
+  HMI_flag.disallow_recovery_flag = false;
 
   TERN_(DEBUG_POWER_LOSS_RECOVERY, marlin_debug_flags = old_flags);
 }
@@ -581,7 +659,8 @@ void PrintJobRecovery::resume() {
     if (info.valid_head) {
       if (info.valid_head == info.valid_foot) {
         DEBUG_ECHOPGM("current_position: ");
-        LOOP_LOGICAL_AXES(i) {
+        LOOP_LOGICAL_AXES(i)
+        {
           if (i) DEBUG_CHAR(',');
           DEBUG_DECIMAL(info.current_position[i]);
         }

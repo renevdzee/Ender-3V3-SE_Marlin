@@ -1378,12 +1378,12 @@ void prepare_line_to_destination() {
       if (TERN0(HOMING_Z_WITH_PROBE, axis == Z_AXIS)) {
         #if BOTH(HAS_HEATED_BED, WAIT_FOR_BED_HEATER)
           // Wait for bed to heat back up between probing points
-          thermalManager.wait_for_bed_heating();
+          // thermalManager.wait_for_bed_heating();
         #endif
 
         #if BOTH(HAS_HOTEND, WAIT_FOR_HOTEND)
           // Wait for the hotend to heat back up between probing points
-          thermalManager.wait_for_hotend_heating(active_extruder);
+          // thermalManager.wait_for_hotend_heating(active_extruder);
         #endif
 
         TERN_(HAS_QUIET_PROBING, if (final_approach) probe.set_probing_paused(true));
@@ -1422,13 +1422,13 @@ void prepare_line_to_destination() {
 
     planner.synchronize();
 
-    if (is_home_dir) {
+    if (is_home_dir)
+    {
+      endstops.validate_homing_move();
 
       #if HOMING_Z_WITH_PROBE && HAS_QUIET_PROBING
         if (axis == Z_AXIS && final_approach) probe.set_probing_paused(false);
       #endif
-
-      endstops.validate_homing_move();
 
       // Re-enable stealthChop if used. Disable diag1 pin on driver.
       TERN_(SENSORLESS_HOMING, end_sensorless_homing_per_axis(axis, stealth_states));
@@ -1583,7 +1583,13 @@ void prepare_line_to_destination() {
     //
     #if HOMING_Z_WITH_PROBE
       if (axis == Z_AXIS) {
-        if (TERN0(BLTOUCH, bltouch.deploy())) return;   // BLTouch was deployed above, but get the alarm state.
+        if (TERN0(BLTOUCH, bltouch.deploy()))
+        {
+          // Fixed a bug where Z axis could not be lowered after FDM leveling failed 107011 -20211014
+          probe.stow();
+          return;
+          // BLTouch was deployed above, but get the alarm state.
+        }
         if (TERN0(PROBE_TARE, probe.tare())) return;
       }
     #endif

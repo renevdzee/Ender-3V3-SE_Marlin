@@ -275,7 +275,8 @@ public:
     }
     return 0;
   }
-
+  // if 'command_ptr' contain target string or not (clh)
+  static inline bool str_contain(char* _str) { if(strstr(command_ptr, _str)) return true; else return false; }
   // Code value as a long or ulong
   static inline int32_t value_long() { return value_ptr ? strtol(value_ptr, nullptr, 10) : 0L; }
   static inline uint32_t value_ulong() { return value_ptr ? strtoul(value_ptr, nullptr, 10) : 0UL; }

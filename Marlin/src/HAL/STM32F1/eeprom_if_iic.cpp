@@ -33,8 +33,11 @@
 
 #include "../../libs/BL24CXX.h"
 #include "../shared/eeprom_if.h"
+extern uint8_t eeprom_bl24cxx_ram[];
 
-void eeprom_init() { BL24CXX::init(); }
+void eeprom_init() { 
+  BL24CXX::init(); 
+}
 
 // ------------------------
 // Public functions
@@ -42,12 +45,17 @@ void eeprom_init() { BL24CXX::init(); }
 
 void eeprom_write_byte(uint8_t *pos, uint8_t value) {
   const unsigned eeprom_address = (unsigned)pos;
-  return BL24CXX::writeOneByte(eeprom_address, value);
+  eeprom_bl24cxx_ram[eeprom_address] = value;
 }
 
-uint8_t eeprom_read_byte(uint8_t *pos) {
+uint8_t eeprom_read_byte(uint8_t *pos) {  //rock_gu_ change_20230310
   const unsigned eeprom_address = (unsigned)pos;
-  return BL24CXX::readOneByte(eeprom_address);
+  // 在没有需要保存的数据时，M500耗时:206ms
+  // return BL24CXX::readOneByte(eeprom_address);
+  
+  // 在没有需要保存的数据时，M500耗时:6ms。注意:如果使用这种方式，
+  // 别的地方使用了BL24CXX::writeOneByte()改写eeprom会导致eeprom_bl24cxx_ram和eeprom中的数据不一致
+  return eeprom_bl24cxx_ram[eeprom_address];
 }
 
 #endif // IIC_BL24CXX_EEPROM

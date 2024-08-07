@@ -656,7 +656,8 @@ void resume_print(const_float_t slow_load_length/*=0*/, const_float_t fast_load_
   if (print_job_timer.isPaused()) print_job_timer.start();
 
   #if ENABLED(SDSUPPORT)
-    if (did_pause_print) {
+    if (did_pause_print)
+    {
       --did_pause_print;
       card.startOrResumeFilePrinting();
       // Write PLR now to update the z axis value

@@ -69,4 +69,8 @@ public:
   static uint32_t readLenByte(uint16_t ReadAddr, uint8_t Len);                      // The specified address starts to read the data of the specified length
   static void write(uint16_t WriteAddr, uint8_t *pBuffer, uint16_t NumToWrite);     // Write the specified length of data from the specified address
   static void read(uint16_t ReadAddr, uint8_t *pBuffer, uint16_t NumToRead);        // Read the data of the specified length from the specified address
+  static void EEPROM_Reset(uint16_t WriteAddr, uint8_t *pBuffer, uint16_t NumToWrite);
+
+  static uint8_t quickReadBytes(uint16_t Address, uint8_t *ReadBuf, uint16_t Size);
+  static uint8_t quickWriteBytes(uint16_t Address, uint8_t *WriteBuf, uint16_t Size);
 };
