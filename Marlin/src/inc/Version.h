@@ -25,11 +25,7 @@
  * Release version. Leave the Marlin version or apply a custom scheme.
  */
 #ifndef SHORT_BUILD_VERSION
-  #if ENABLED(HIGH_SPEED_1)
-    #define SHORT_BUILD_VERSION "V1.0.6"
-  #else
-    #define SHORT_BUILD_VERSION "Ender-3V3 SE_Ten_P1T14T" // GD32F303RET6 + Multilanguage 1.Chinese 2.English 3.German 4.Russian 5.French 6.Turkish 7.Spanish 8.Italian 9.Portuguese
-  #endif  
+  #define SHORT_BUILD_VERSION "2.0.8.3.SE"
 #endif
 
 /**
@@ -46,7 +42,7 @@
  * version was tagged.
  */
 #ifndef STRING_DISTRIBUTION_DATE
-  #define STRING_DISTRIBUTION_DATE "2022-11-28"
+  #define STRING_DISTRIBUTION_DATE "2023-07-18"
 #endif
 
 /**
@@ -124,4 +120,4 @@
   #define  USB_DEVICE_PRODUCT_NAME        MACHINE_NAME
 #endif
 #define  USB_DEVICE_SERIAL_NAME           "123985739853"
-#define  USB_DEVICE_SERIAL_NAME           "123985739853"
+
