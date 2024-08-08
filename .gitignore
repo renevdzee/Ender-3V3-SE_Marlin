@@ -52,6 +52,7 @@ tags
 *.o
 *.obj
 *.ino.cpp
+output.map
 
 # Precompiled Headers
 *.gch

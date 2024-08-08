@@ -59,7 +59,7 @@ void HX711::init(int clkPin, int sdoPin)
 */
 int HX711::getVal(bool isShowMsg)
 {
-  static unsigned int lastTickMs = 0;  
+  static unsigned int lastTickMs = 0;
   int count = 0;
   unsigned int ms = GET_TICK_MS();
 
@@ -76,7 +76,7 @@ int HX711::getVal(bool isShowMsg)
     GPIO_SET_VAL(clkPin, 0);
     CHECK_AND_RUN((GPIO_GET_VAL(sdoPin) == 1), (count++));
   }
-  
+
   GPIO_SET_VAL(clkPin, 1);
 	count |= ((count & 0x00800000) != 0 ? 0xFF000000 : 0); //24位有符号，转成32位有符号
   GPIO_SET_VAL(clkPin, 0);
@@ -104,14 +104,16 @@ void Filters::hFilter(double *vals, int count, double cutFrqHz, double acqFrqHz)
   FOR_LOOP_TIMES(i, 0, count, {
     vi = vals[i];
     vo = (vi - viPrev + voPrev) * coff;
-    voPrev = vo; 
+    voPrev = vo;
     viPrev = vi;
     vals[i] = fabs(vo);
   });
 }
+
 /**冒泡排序
  *升序
  */
+/*
 static void BubbleSort(double arr[],int len)
 {
  int i,j;
@@ -127,8 +129,9 @@ static void BubbleSort(double arr[],int len)
             arr[j+1] = tem;
         }
      }
- } 
+ }
 }
+*/
 
 /*
 * Function Name: 	tFilter(double *vals, int count)
@@ -178,7 +181,7 @@ xyz_long_t ProbeAcq::readBase()
   ARY_MIN(minVal, vals, PI_COUNT / 2);
   ARY_MAX(maxVal, vals, PI_COUNT / 2);
   ARY_AVG(avgVal, vals, PI_COUNT / 2);
-#if ENABLED(SHOW_MSG) 
+#if ENABLED(SHOW_MSG)
   PRINTF("\n***BASE:MIN=%d, AVG=%d, MAX=%d***\n\n", (int)minVal, (int)avgVal, (int)maxVal);
 #endif
   xyz_long_t xyz = {(int)minVal, (int)avgVal, (int)maxVal};
@@ -205,9 +208,9 @@ float ProbeAcq::probeTimes(int max_times, xyz_float_t rdy_pos, float step_mm, fl
     pa.hx711.init(HX711_SCK_PIN, HX711_SDO_PIN);
     pa.minZ_mm = min_dis_mm;
     pa.basePos_mm = rdy_pos;
-    pa.baseSpdXY_mm_s = 100;        
+    pa.baseSpdXY_mm_s = 100;
     pa.baseSpdZ_mm_s = 5;
-    pa.step_mm = step_mm;             
+    pa.step_mm = step_mm;
     pa.minHold = min_hold;
     pa.maxHold = max_hold;
     FOR_LOOP_TIMES(i, 0, (max_times <= 0 ? 1 : max_times), {
@@ -234,9 +237,9 @@ void ProbeAcq::shakeZAxis(int times)
   delayUs = delayUs <= 10 ? 10 : delayUs;
   int dir = AXIS_Z_DIR_GET();
   FOR_LOOP_TIMES(i, 0, times, {
-    AXIS_Z_DIR_SET(Z_DIR_ADD);        
+    AXIS_Z_DIR_SET(Z_DIR_ADD);
     FOR_LOOP_TIMES(j, 0, 4 * runStep, AXIS_Z_STEP_PLUS(delayUs / 2));
-    AXIS_Z_DIR_SET(Z_DIR_DIV); 
+    AXIS_Z_DIR_SET(Z_DIR_DIV);
     FOR_LOOP_TIMES(j, 0, 4 * runStep, AXIS_Z_STEP_PLUS(delayUs / 2));
     MARLIN_CORE_IDLE();
   });
@@ -252,10 +255,12 @@ void ProbeAcq::shakeZAxis(int times)
 void ProbeAcq::calMinZ()
 {
   double* valP_t = &this->valP[PI_COUNT]; //rock_开始没有*2，数组越界使用 20230204
+  #if ENABLED(SHOW_MSG)
   double* posZ_t = &this->posZ[PI_COUNT]; //
-  
+  #endif
+
   // 1、滤波  rock
-  Filters::tFilter(this->valP, PI_COUNT * 2); 
+  Filters::tFilter(this->valP, PI_COUNT * 2);
   Filters::hFilter(this->valP, PI_COUNT * 2, RC_CUTE_FRQ, 80);
   Filters::lFilter(this->valP, PI_COUNT * 2, LFILTER_K1_NEW);
 
@@ -267,7 +272,7 @@ void ProbeAcq::calMinZ()
   FOR_LOOP_TIMES(i, 0, PI_COUNT, PRINTF((i == (PI_COUNT - 1) ? "%s]\n\n" : "%s,"), getStr(valP_t[i])));
   #endif
   // 3、对数据进行归一化，方便处理
-  double valMin = +0x00FFFFFF, valMax = -0x00FFFFFF;  
+  double valMin = +0x00FFFFFF, valMax = -0x00FFFFFF;
   ARY_MIN(valMin, valP_t, PI_COUNT);
   ARY_MAX(valMax, valP_t, PI_COUNT);
   FOR_LOOP_TIMES(i, 0, PI_COUNT, {valP_t[i] = (valP_t[i] - valMin) / (valMax - valMin);});
@@ -297,9 +302,9 @@ bool ProbeAcq::checkTrigger()
 {
   static double vp_t[PI_COUNT * 2] = {0};
   static double *valP_t = &vp_t[PI_COUNT]; //rock_20230204
-  
+
   #if ENABLED(SHOW_MSG)
-  //static long long lastTickMs = 0, lastUnfitDifVal = 0;  
+  //static long long lastTickMs = 0, lastUnfitDifVal = 0;
   //PRINTF("T=%08d , S=%08d , U=%08d \n", (int)(GET_TICK_MS() - lastTickMs), fitVal, unfitDifVal);
   //lastTickMs = GET_TICK_MS();
   #endif
@@ -308,7 +313,7 @@ bool ProbeAcq::checkTrigger()
   FOR_LOOP_TIMES(i, 0, PI_COUNT * 2, vp_t[i] = this->valP[i]);
 
   // 1、数据滤波  rock
-  Filters::tFilter(vp_t, PI_COUNT * 2); 
+  Filters::tFilter(vp_t, PI_COUNT * 2);
   Filters::hFilter(vp_t, PI_COUNT * 2, RC_CUTE_FRQ, 80);
   Filters::lFilter(vp_t, PI_COUNT * 2, LFILTER_K1_NEW);
 
@@ -361,7 +366,7 @@ ProbeAcq* ProbeAcq::probePointByStep()
     PRINTF("\nPROBE: rdyX=%s, rdyY=%s, rdyZ=%s, spdXY_mm_s=%s, spdZ_mm_s=%s",
                           getStr(this->basePos_mm.x), getStr(this->basePos_mm.y), getStr(this->basePos_mm.z), getStr(this->baseSpdXY_mm_s), getStr(this->baseSpdZ_mm_s));
     PRINTF("len_mm=%s, baseCount=%d, minHold=%d, maxHold=%d, step_mm=%s\n\n",
-                          getStr(this->minZ_mm), PI_COUNT, this->minHold, this->maxHold, getStr(this->step_mm)); 
+                          getStr(this->minZ_mm), PI_COUNT, this->minHold, this->maxHold, getStr(this->step_mm));
   #endif
 
   memset(this->posZ, 0, sizeof(this->posZ));
@@ -394,7 +399,7 @@ ProbeAcq* ProbeAcq::probePointByStep()
     runSteped += runStep;
     MARLIN_CORE_IDLE();
     nowVal = this->hx711.getVal(0);
-    FOR_LOOP_TIMES(i, 0, PI_COUNT * 2 - 1, this->valP[i] = this->valP[i + 1]);  
+    FOR_LOOP_TIMES(i, 0, PI_COUNT * 2 - 1, this->valP[i] = this->valP[i + 1]);
     FOR_LOOP_TIMES(i, 0, PI_COUNT * 2 - 1, this->posZ[i] = this->posZ[i + 1]);
     this->valP[PI_COUNT * 2 - 1] = nowVal - unfitAvgVal;                 //将压力值放入队列
     this->posZ[PI_COUNT * 2 - 1] = current_position[2] - (float)runSteped / steps[2];   //将压力值对应的z位置放入队列
@@ -432,7 +437,7 @@ bool clearByBed(xyz_float_t startPos, xyz_float_t endPos, float minTemp, float m
   Popup_Window_Height(Nozz_Hot);  //刷新对高页面显示_喷嘴加热中
   SET_HOTEND_TEMP(maxTemp, 0);
   SET_BED_TEMP(65);  //暂时取消热床加热
- 
+
   WAIT_HOTEND_TEMP(60 * 5 * 1000, 5);//等待温度达到设定值
   WAIT_BED_TEMP(60 * 5 * 1000, 2);
   Popup_Window_Height(Nozz_Clear);  //刷新对高页面显示_擦喷嘴中
@@ -455,16 +460,16 @@ bool clearByBed(xyz_float_t startPos, xyz_float_t endPos, float minTemp, float m
   DO_BLOCKING_MOVE_TO_XYZ(endPos.x, endPos.y, endPos.z-0.1, 5);//往回45°拉一点，撤掉余料
   RUN_AND_WAIT_GCODE_CMD("G28 Z", true);
   /*
-  int unfitAvgVal = pa.readBase().y; 
+  int unfitAvgVal = pa.readBase().y;
 
   // RUN_AND_WAIT_GCODE_STR("G1 F100 X%s Y%s z%s", false, getStr(startPos.x), getStr(startPos.y),getStr(start_mm));
   DO_BLOCKING_MOVE_TO_XY(startPos.x, startPos.y, 50);
   DO_BLOCKING_MOVE_TO_Z(start_mm+0.2 , 5);
   SET_HOTEND_TEMP(minTemp, 0);
-  
+
   // RUN_AND_WAIT_GCODE_STR("G1 F100 X%s Y%s", false, getStr(endPos.x), getStr(endPos.y));
   RUN_AND_WAIT_GCODE_STR("G1 F200 X%s Y%s z%s", false, getStr(endPos.x), getStr(endPos.y),getStr(end_mm));
-  
+
   SET_HOTEND_TEMP(minTemp, 0);
   SET_FAN_SPD(255);
 
@@ -478,7 +483,7 @@ bool clearByBed(xyz_float_t startPos, xyz_float_t endPos, float minTemp, float m
   while (AXIS_XYZE_STATUS()){
     int nowVal = pa.hx711.getVal(0);
     // PRINT_LOG("nowVal:",nowVal,"unfitAvgVal:",unfitAvgVal,"nowVal - unfitAvgVal:",abs(nowVal - unfitAvgVal));
-    CHECK_AND_RUN_AND_ELSE((abs(nowVal - unfitAvgVal) < (MIN_HOLD)), AXIS_Z_DIR_SET(Z_DIR_DIV), AXIS_Z_DIR_SET(Z_DIR_ADD));  
+    CHECK_AND_RUN_AND_ELSE((abs(nowVal - unfitAvgVal) < (MIN_HOLD)), AXIS_Z_DIR_SET(Z_DIR_DIV), AXIS_Z_DIR_SET(Z_DIR_ADD));
     FOR_LOOP_TIMES(i, 0, runStep, AXIS_Z_STEP_PLUS(delayUs));
     MARLIN_CORE_IDLE();
   }
@@ -487,10 +492,10 @@ bool clearByBed(xyz_float_t startPos, xyz_float_t endPos, float minTemp, float m
   SET_FAN_SPD(255);                             //打开模型散热风扇，保证更快速度的降温
   WAIT_HOTEND_TEMP(60 * 5 * 1000, 5);           //等待温度达到设定值
   AXIS_Z_DIR_SET(Z_DIR_ADD);
-  // PRINT_LOG("endPos.x = ", endPos.x + (endPos.x - startPos.x) / 5," endPos.y = ", endPos.y + (endPos.y - startPos.y) / 5," GET_CURRENT_POS().z + 3.5 = ",GET_CURRENT_POS().z + 3.5); 
+  // PRINT_LOG("endPos.x = ", endPos.x + (endPos.x - startPos.x) / 5," endPos.y = ", endPos.y + (endPos.y - startPos.y) / 5," GET_CURRENT_POS().z + 3.5 = ",GET_CURRENT_POS().z + 3.5);
   RUN_AND_WAIT_GCODE_STR("G1 F300 X%s Y%s Z%s", true, getStr(endPos.x + (endPos.x - startPos.x) / 5), getStr(endPos.y + (endPos.y - startPos.y) / 5), getStr(GET_CURRENT_POS().z + 3));
 
-  
+
   pa.shakeZAxis(100);
   AXIS_Z_DIR_SET(Z_DIR_ADD);
   RUN_AND_WAIT_GCODE_CMD("G28 Z", true);
@@ -543,7 +548,7 @@ bool probeByPress(xyz_float_t basePos_mm, float* outZ)
 bool probeByTouch(xyz_float_t rdyPos_mm, float* outZ)
 {
   ProbeAcq pa;
-  pa.shakeZAxis(20);  
+  pa.shakeZAxis(20);
   xyz_float_t touchOftPos = CRTOUCH_OFT_POS;
   int oldNozTmp = GET_NOZZLE_TAR_TEMP(0);
   int oldBedTmp = GET_BED_TAR_TEMP();
@@ -552,7 +557,7 @@ bool probeByTouch(xyz_float_t rdyPos_mm, float* outZ)
   DO_BLOCKING_MOVE_TO_XY(rdyPos_mm.x - touchOftPos.x, rdyPos_mm.y - touchOftPos.y, 100);
   *outZ = PROBE_PPINT_BY_TOUCH(rdyPos_mm.x - touchOftPos.x, rdyPos_mm.y - touchOftPos.y);   //调用Marlin固有的CR-TOUCH测量接口
   PRINTF("\n***PROBE BY TOUCH: touch_z=%s***\n", getStr(*outZ));
- 
+
   SET_HOTEND_TEMP(oldNozTmp, 0);
   SET_BED_TEMP(oldBedTmp);
 
@@ -573,8 +578,8 @@ void printTestResult(float *zTouch, float *zPress)
   static float acqVals[128][3] = {0};    //最大保存128组测量数据
   static int acqValIndex = 0;
 
-  PRINTF("\n***GET Z OFFSET: zTouch={%s, %s, %s}, zPress={%s, %s, %s}, zOffset={%s, %s, %s}***\n", 
-    getStr(zTouch[0]), getStr(zTouch[1]), getStr(zTouch[2]), getStr(zPress[0]), getStr(zPress[1]), getStr(zPress[2]), 
+  PRINTF("\n***GET Z OFFSET: zTouch={%s, %s, %s}, zPress={%s, %s, %s}, zOffset={%s, %s, %s}***\n",
+    getStr(zTouch[0]), getStr(zTouch[1]), getStr(zTouch[2]), getStr(zPress[0]), getStr(zPress[1]), getStr(zPress[2]),
     getStr(zPress[0] - zTouch[0]), getStr(zPress[1] - zTouch[1]), getStr(zPress[2] - zTouch[2]));
 
   float zt_avg = 0, zp_avg = 0;
@@ -585,28 +590,28 @@ void printTestResult(float *zTouch, float *zPress)
   acqVals[acqValIndex][1] = zt_avg;
   acqVals[acqValIndex][2] = zp_avg - zt_avg;
   acqValIndex = (acqValIndex >= 127 ? 127 : (acqValIndex + 1));
-  FOR_LOOP_TIMES(i, 0, acqValIndex, PRINTF("%d\t%s\t%s\t%s\n", i, getStr(acqVals[i][0]), getStr(acqVals[i][1]), getStr(acqVals[i][2])));  
+  FOR_LOOP_TIMES(i, 0, acqValIndex, PRINTF("%d\t%s\t%s\t%s\n", i, getStr(acqVals[i][0]), getStr(acqVals[i][1]), getStr(acqVals[i][2])));
 }
 //一次对高
 float Hight_One(xyz_float_t pressPos)
 {
-  float temp_value=0,zoffset_avg=0;
+  float temp_value=0;
   float zTouch[1] = {0};
   float zPress[1] = {0};
-  
+
   bool isRunProByPress=true, isRunProByTouch=true;
-  SET_BED_LEVE_ENABLE(false);  
-  // CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 3, {probeByTouch(rdyPos[i], &zTouch[i]); rdyPos[i].z = zTouch[i];})});       
+  SET_BED_LEVE_ENABLE(false);
+  // CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 3, {probeByTouch(rdyPos[i], &zTouch[i]); rdyPos[i].z = zTouch[i];})});
   CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 1, {probeByTouch(pressPos, &zTouch[0]); pressPos.z = zTouch[0];})});
   //3. 使用压力传感器对喷头高度进行测量
-      
-  SET_BED_LEVE_ENABLE(false);                                     
-  // CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 3, {probeByPress(rdyPos[i], &zPress[i]); zPress[i] += NOZ_TEMP_OFT_MM;})); 
-  CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 1, {probeByPress(pressPos, &zPress[0]); zPress[0] += NOZ_TEMP_OFT_MM;}));      
-  //4. 处理结果    
+
+  SET_BED_LEVE_ENABLE(false);
+  // CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 3, {probeByPress(rdyPos[i], &zPress[i]); zPress[i] += NOZ_TEMP_OFT_MM;}));
+  CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 1, {probeByPress(pressPos, &zPress[0]); zPress[0] += NOZ_TEMP_OFT_MM;}));
+  //4. 处理结果
   temp_value = (zPress[0] - zTouch[0]);
-  printTestResult(zTouch, zPress);      
-  DO_BLOCKING_MOVE_TO_Z(5, 5);    
+  printTestResult(zTouch, zPress);
+  DO_BLOCKING_MOVE_TO_Z(5, 5);
   return temp_value;
 }
 
@@ -616,13 +621,13 @@ float Multiple_Hight(bool isRunProByPress, bool isRunProByTouch)
   float zoffset_value[3]={0};
   uint8_t loop_max=0,loop_num=0;
   xyz_float_t pressPos = PRESS_XYZ_POS;
-  float temp_value=0,temp_zoffset=0,temp_zoffset1=0,zoffset_avg=0;
+  float temp_zoffset=0,temp_zoffset1=0,zoffset_avg=0;
    for(loop_num=0;loop_num<ZOFFSET_REPEAT_NIN;loop_num++)
-   {  
-    pressPos.y-=(loop_num*5);    
+   {
+    pressPos.y-=(loop_num*5);
      zoffset_value[loop_num]=Hight_One(pressPos);
      PRINTF("\n***OUTPUT_ZOFFSET: zOffset=%s***\n", getStr(zoffset_value[loop_num]));
-     RUN_AND_WAIT_GCODE_CMD("G28", true);                        //测量前先获取一次HOME点 
+     RUN_AND_WAIT_GCODE_CMD("G28", true);                        //测量前先获取一次HOME点
    }
    temp_zoffset=fabs(zoffset_value[0])-fabs(zoffset_value[1]);
    if(fabs(temp_zoffset)<=ZOFFSET_COMPARE) //采集到的值统一
@@ -633,15 +638,15 @@ float Multiple_Hight(bool isRunProByPress, bool isRunProByTouch)
      SET_HOTEND_TEMP(140, 0);
      SET_FAN_SPD(255);                             //打开模型散热风扇，保证更快速度的降温
      WAIT_HOTEND_TEMP(60 * 5 * 1000, 5);           //等待温度达到设定值
-     Popup_Window_Height(Nozz_Finish); //对高完成刷新页面 
-     return zoffset_avg; 
-   }  
+     Popup_Window_Height(Nozz_Finish); //对高完成刷新页面
+     return zoffset_avg;
+   }
    else //如果不统一就多调试几次
    {
       for(loop_max=2; loop_max<ZOFFSET_REPEAT_NAX;loop_max++)
       {
         pressPos.y-=(loop_max-2)*5;
-        zoffset_value[2]=Hight_One(pressPos); 
+        zoffset_value[2]=Hight_One(pressPos);
         temp_zoffset=fabs(zoffset_value[2])-fabs(zoffset_value[0]);
         temp_zoffset1=fabs(zoffset_value[2])-fabs(zoffset_value[1]);
         if((fabs(temp_zoffset)>ZOFFSET_COMPARE)&&(fabs(temp_zoffset1)>ZOFFSET_COMPARE))//两个都不在范围内
@@ -654,7 +659,7 @@ float Multiple_Hight(bool isRunProByPress, bool isRunProByTouch)
           {
             zoffset_value[1]=zoffset_value[2];
           }
-          else 
+          else
           {
             zoffset_value[0]=zoffset_value[2];
           }
@@ -664,9 +669,9 @@ float Multiple_Hight(bool isRunProByPress, bool isRunProByTouch)
           SET_HOTEND_TEMP(140, 0);
           SET_FAN_SPD(255);                             //打开模型散热风扇，保证更快速度的降温
           WAIT_HOTEND_TEMP(60 * 5 * 1000, 5);           //等待温度达到设定值
-          Popup_Window_Height(Nozz_Finish);             //对高完成刷新页面 
-          return zoffset_avg; 
-        }        
+          Popup_Window_Height(Nozz_Finish);             //对高完成刷新页面
+          return zoffset_avg;
+        }
       }
       //防止Z轴补偿有-0.04的情况
       if(ZOFFSET_REPEAT_NAX==loop_max) //防止输出是0，最后直接算一个。
@@ -678,13 +683,13 @@ float Multiple_Hight(bool isRunProByPress, bool isRunProByTouch)
           SET_HOTEND_TEMP(140, 0);
           SET_FAN_SPD(255);                             //打开模型散热风扇，保证更快速度的降温
           WAIT_HOTEND_TEMP(60 * 5 * 1000, 5);           //等待温度达到设定值
-          Popup_Window_Height(Nozz_Finish);             //对高完成刷新页面 
+          Popup_Window_Height(Nozz_Finish);             //对高完成刷新页面
           */
-          return zoffset_avg; 
+          return zoffset_avg;
       }
-      return zoffset_avg; //对高失败 
-   }   
-  //  CHECK_AND_RUN((isRunProByPress && isRunProByTouch), SET_Z_OFFSET((zPress[0] - zTouch[0]), false));  
+      return zoffset_avg; //对高失败
+   }
+  //  CHECK_AND_RUN((isRunProByPress && isRunProByTouch), SET_Z_OFFSET((zPress[0] - zTouch[0]), false));
 }
 /*
 * Function Name: 	getZOffset(float* outOffset)
@@ -700,23 +705,23 @@ bool getZOffset(bool isNozzleClr, bool isRunProByPress, bool isRunProByTouch, fl
   xyz_float_t rdyPos[3] = {{0, 0, HIGHT_UPRAISE_Z}, {0, 0, HIGHT_UPRAISE_Z}, {0, 0, HIGHT_UPRAISE_Z}};
   rdyPos[0].x = rdyPos[2].x = (pressPos.x < (BED_SIZE_X_MM / 2) ? (touchOftPos.x < 0) : (touchOftPos.x > 0)) ? pressPos.x : touchOftPos.x + 10;
   // rdyPos[0].x = ((pressPos.x < (BED_SIZE_X_MM / 2) ? (touchOftPos.x < 0) : (touchOftPos.x > 0)) ? pressPos.x : touchOftPos.x + 10);//-30
-  rdyPos[0].x -= 9; 
+  rdyPos[0].x -= 9;
   rdyPos[0].y = rdyPos[1].y = ((pressPos.y < (BED_SIZE_Y_MM / 2) ? (touchOftPos.y < 0) : (touchOftPos.y > 0)) ? pressPos.y : touchOftPos.y + 10);//-15
   rdyPos[0].y = rdyPos[1].y-=17;
   rdyPos[1].x = rdyPos[0].x + (pressPos.x < (BED_SIZE_X_MM / 2) ? +1 : -1) * BED_SIZE_X_MM / 5;
   rdyPos[2].y = rdyPos[0].y + (pressPos.y < (BED_SIZE_Y_MM / 2) ? +1 : -1) * BED_SIZE_Y_MM / 5;
-  rdyPos[2].x = (rdyPos[0].x+(rdyPos[1].x-rdyPos[0].x)/2); 
+  rdyPos[2].x = (rdyPos[0].x+(rdyPos[1].x-rdyPos[0].x)/2);
 //  PRINT_LOG("(rdyPos[1].x-rdyPos[0].x)/2:",(rdyPos[1].x-rdyPos[0].x)/2);
 //   PRINT_LOG("rdyPos[0].x:",rdyPos[0].x,"rdyPos[1].x:",rdyPos[1].x,"rdyPos[2].x:",rdyPos[2].x);
    bool SoftEndstopEnable = soft_endstop._enabled;
   bool reenable = planner.leveling_active;
   //0. 测量前的准备工作
   SET_Z_OFFSET(0, false);                               //先对z-offset清0，防止当z-offset对测量结果造成影响
-  RUN_AND_WAIT_GCODE_CMD("G28", true);                        //测量前先获取一次HOME点  
+  RUN_AND_WAIT_GCODE_CMD("G28", true);                        //测量前先获取一次HOME点
 
   //1. 针对PLA耗材进行喷头擦式
   srand(millis());
-  float ret1 = rand() % 15 + 2; //生成1~10的随机数
+  // float ret1 = rand() % 15 + 2; //生成1~10的随机数
   // SERIAL_ECHOLNPAIR(" ret1=: ",ret1);
   xyz_float_t startPos = {rdyPos[0].x + (rdyPos[1].x - rdyPos[0].x) * 1 / 5-10, rdyPos[0].y + (rdyPos[2].y - rdyPos[0].y) * 2 / 5 + random(0, 9) - 4, 6};
   // xyz_float_t startPos = {rdyPos[0].x + (rdyPos[1].x - rdyPos[0].x) * 1 / 5-10, rdyPos[0].y + (rdyPos[2].y - rdyPos[0].y) * 2 / 5 + 9 - 4, 6};
@@ -727,31 +732,31 @@ bool getZOffset(bool isNozzleClr, bool isRunProByPress, bool isRunProByTouch, fl
    endPos.x=CLEAR_NOZZL_END_X;endPos.y=CLEAR_NOZZL_END_Y;
   startPos.z=0;
   endPos.z=0;
-  
-  CHECK_AND_RUN(isNozzleClr, clearByBed(startPos, endPos, 140, 200)); 
+
+  CHECK_AND_RUN(isNozzleClr, clearByBed(startPos, endPos, 140, 200));
   Popup_Window_Height(Nozz_Hight);  //刷新对高页面显示_对高测量中
 
   //2. 使用CR-TOUCCH测量触发高度
 /*
   float zTouch[3] = {0};
-  SET_BED_LEVE_ENABLE(false);  
-  // CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 3, {probeByTouch(rdyPos[i], &zTouch[i]); rdyPos[i].z = zTouch[i];})});       
+  SET_BED_LEVE_ENABLE(false);
+  // CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 3, {probeByTouch(rdyPos[i], &zTouch[i]); rdyPos[i].z = zTouch[i];})});
   CHECK_AND_RUN(isRunProByTouch, {FOR_LOOP_TIMES(i, 0, 1, {probeByTouch(pressPos, &zTouch[0]); pressPos.z = zTouch[0];})});
   //3. 使用压力传感器对喷头高度进行测量
   float zPress[3] = {0};
-  SET_BED_LEVE_ENABLE(false);                                     
-  // CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 3, {probeByPress(rdyPos[i], &zPress[i]); zPress[i] += NOZ_TEMP_OFT_MM;})); 
-  CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 1, {probeByPress(pressPos, &zPress[0]); zPress[0] += NOZ_TEMP_OFT_MM;}));      
+  SET_BED_LEVE_ENABLE(false);
+  // CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 3, {probeByPress(rdyPos[i], &zPress[i]); zPress[i] += NOZ_TEMP_OFT_MM;}));
+  CHECK_AND_RUN(isRunProByPress, FOR_LOOP_TIMES(i, 0, 1, {probeByPress(pressPos, &zPress[0]); zPress[0] += NOZ_TEMP_OFT_MM;}));
   Popup_Window_Height(Nozz_Finish); //对高完成刷新页面
   //4. 处理结果
   float zt_avg = 0, zp_avg = 0;
   //一次就不用平均
   // ARY_AVG(zt_avg, zTouch, 3);
   // ARY_AVG(zp_avg, zPress, 3);
- 
+
   ARY_AVG(zt_avg, zTouch, 1);
   ARY_AVG(zp_avg, zPress, 1);
-  printTestResult(zTouch, zPress);  
+  printTestResult(zTouch, zPress);
   SET_BED_LEVE_ENABLE(true);
   DO_BLOCKING_MOVE_TO_Z(5, 5);
   // DO_BLOCKING_MOVE_TO_XY(BED_SIZE_X_MM / 2, BED_SIZE_Y_MM / 2, 50);  // 取消无用的步骤 rock_20230528
@@ -759,12 +764,12 @@ bool getZOffset(bool isNozzleClr, bool isRunProByPress, bool isRunProByTouch, fl
 */
   *outOffset=Multiple_Hight(isRunProByPress,isRunProByTouch);  //测量两次后得到数据
   PRINTF("\n***OUTPUT_ZOFFSET: zOffset=%s***\n", getStr(*outOffset));
-  
+
   //LIMIT(*outOffset, ZOFFSET_VALUE_MIN, ZOFFSET_VALUE_MAX);
-  
+
   soft_endstop._enabled = SoftEndstopEnable;
   planner.leveling_active = reenable;
-  if((*outOffset>ZOFFSET_VALUE_MAX)||(*outOffset<ZOFFSET_VALUE_MIN))return false; //如果对高值太离谱直接不要 
+  if((*outOffset>ZOFFSET_VALUE_MAX)||(*outOffset<ZOFFSET_VALUE_MIN))return false; //如果对高值太离谱直接不要
   return (isRunProByPress && isRunProByTouch);  //喷头和CR-TOUCH都测量，数据才有效
 }
 
@@ -784,7 +789,7 @@ void gcodeG212()
   {
     HX711 hx711;
     hx711.init(HX711_SCK_PIN, HX711_SDO_PIN);
-    FOR_LOOP_TIMES(i, 0, count, hx711.getVal(1)); 
+    FOR_LOOP_TIMES(i, 0, count, hx711.getVal(1));
     return;
   }
 
@@ -797,9 +802,9 @@ void gcodeG212()
     pa.basePos_mm.x = cp.x;
     pa.basePos_mm.y = cp.y;
     pa.basePos_mm.z = 3;
-    pa.baseSpdXY_mm_s = 100;        
+    pa.baseSpdXY_mm_s = 100;
     pa.baseSpdZ_mm_s = 5;
-    pa.step_mm = 0.02;  //rock             
+    pa.step_mm = 0.02;  //rock
     pa.minHold = MIN_HOLD;
     pa.maxHold = MAX_HOLD;
     pa.probePointByStep();

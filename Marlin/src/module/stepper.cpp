@@ -1410,7 +1410,7 @@ void Stepper::isr() {
 
     if (!nextMainISR) pulse_phase_isr();                            // 0 = Do coordinated axes Stepper pulses
 
-    TERN_(HAS_SHAPING, shaping_isr()); 
+    TERN_(HAS_SHAPING, shaping_isr());
 
     #if ENABLED(LIN_ADVANCE)
       if (!nextAdvanceISR) nextAdvanceISR = advance_isr();          // 0 = Do Linear Advance E Stepper pulses
@@ -1649,7 +1649,7 @@ void Stepper::pulse_phase_isr() {
     // Start an active pulse if needed
     #define PULSE_START(AXIS) do{ \
       if (step_needed[_AXIS(AXIS)]) { \
-         count_position[_AXIS(AXIS)] += count_direction[_AXIS(AXIS)]; \ 
+         count_position[_AXIS(AXIS)] += count_direction[_AXIS(AXIS)]; \
         _APPLY_STEP(AXIS, !_INVERT_STEP_PIN(AXIS), 0); \
       } \
     }while(0)
@@ -2834,7 +2834,7 @@ void Stepper::init() {
 
   void Stepper::set_shaping_frequency(const AxisEnum axis, const float freq) {
     // enabling or disabling shaping whilst moving can result in lost steps
-  
+
     Planner::synchronize();
 
     const bool was_on = ISRS_ENABLED();
@@ -2861,7 +2861,7 @@ void Stepper::init() {
     #endif
 
     if (was_on) ENABLE_ISRS();
-    
+
   }
   float Stepper::get_shaping_frequency(const AxisEnum axis) {
     TERN_(INPUT_SHAPING_X, if (axis == X_AXIS) return shaping_x.frequency);
@@ -2905,7 +2905,7 @@ void Stepper::_set_position(const int32_t &a, const int32_t &b, const int32_t &c
     count_position.set(a, b, c);
   #endif
   count_position.e = e;
-    
+
   #if ENABLED(INPUT_SHAPING_X)
     if (shaping_x.enabled) {
       count_position.x += x_shaping_delta;
@@ -2959,7 +2959,7 @@ void Stepper::set_axis_position(const AxisEnum a, const int32_t &v) {
   count_position[a] = v;
   TERN_(INPUT_SHAPING_X, if (a == X_AXIS) shaping_x.last_block_end_pos = v);
   TERN_(INPUT_SHAPING_Y, if (a == Y_AXIS) shaping_y.last_block_end_pos = v);
-  
+
   #ifdef __AVR__
     // Reenable Stepper ISR
     if (was_enabled) wake_up();
