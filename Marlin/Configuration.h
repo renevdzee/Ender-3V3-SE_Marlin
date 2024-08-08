@@ -148,9 +148,11 @@
 
 // Wi-Fi
 #define HAS_CREALITY_WIFI
-//使用开关电源的功率选择。  Switching power
-#define USE_SWITCH_POWER_200W  0 //默认1 ：使用的200w的电源，喷嘴和热床不能同时加热。 0： 使用的>200w的电源，功率足够，可以同时加热
-#define CREALITY_LEVEL_COMPENSATION_ALGORITHM   1 //1 使用算法  0 不适用算法
+// Power selection using a switching power supply.  Switching power
+// Default 1 ：With the 200w power supply used, the nozzle and heat bed cannot be heated at the same time.
+// 0： The >200w power supply used is powerful enough for simultaneous heating
+#define USE_SWITCH_POWER_200W  0
+#define CREALITY_LEVEL_COMPENSATION_ALGORITHM   1 // 1: used 0: not used
 #if ENABLED(CREALITY_LEVEL_COMPENSATION_ALGORITHM)
   #define COMPEN_FACTOR_15   0.15
   #define COMPEN_FACTOR_10   0.10
@@ -159,19 +161,19 @@
   #define COMPEN_FACTOR_3    0.03
   #define COMPEN_FACTOR_2    0.02
   #define COMPEN_FACTOR_1    0.01
-  #define ALGORITHM_INFO_PRINT  0 //调平算法信息打印
-  #define LEVEL_ALGORITHM_MIN  -0.7 //使用自动调平算法下边界
-  #define LEVEL_ALGORITHM_MAX   0.7 //使用自动调平算法上边界
+  #define ALGORITHM_INFO_PRINT  0 // Printing of leveling algorithm information
+  #define LEVEL_ALGORITHM_MIN  -0.7 // Lower boundaries using auto-leveling algorithms
+  #define LEVEL_ALGORITHM_MAX   0.7 // Upper boundary using auto-leveling algorithm
 #endif
 #define USE_BEEPER 1
-#define PLATFORM_OFFSET         1 //1:结构件背板2.5mm，固件需要做偏移适配 0：结构件背板没有做偏移
-#define HIGH_SPEED              1 //高速模式 1：打开高速模式 150mm/s; 0：低速模式 80mm/s 
-#define HIGH_SPEED_1            1 //只开关高速的宏  
-#define SHOW_GRID_VALUES        1 //1 显示自动调平网格值  0 不显示自动调平网格值 
-#define K8_EXTRUDER             0 //1 是K8挤出机   0 是精灵挤出机
-#define USER_LEVEL_CHECK        1 // 调平校准使能
-#define WUHAN_CHENGE_PLATFORM   1 // 武汉改平台板  20230913_Rock
-//打开高速打印的宏之后由于震动补偿功能会高温报警
+#define PLATFORM_OFFSET         1 // 1: 2.5mm structural backplane, firmware needs to be offset adapted 0: structural backplane is not off-set
+#define HIGH_SPEED              1 // High-speed mode 1: Open high-speed mode 150mm/s; 0: Low-speed mode 80mm/s
+#define HIGH_SPEED_1            1 // Switching high-speed macros only
+#define SHOW_GRID_VALUES        1 // 1: Display auto-leveling grid values 0: Do not display auto-leveling grid values
+#define K8_EXTRUDER             0 // 1 is a K8 extruder 0 is a Genie extruder
+#define USER_LEVEL_CHECK        1 // Leveling Calibration Enable
+#define WUHAN_CHENGE_PLATFORM   1 // Wuhan change platform board  20230913_Rock
+// High temperature alarm due to vibration compensation after turning on the high-speed printing macro.
 
 // Printer's unique ID, used by some programs to differentiate between machines.
 // Choose your own or use a service like https://www.uuidgenerator.net/version4
@@ -467,7 +469,7 @@
 #define TEMP_SENSOR_5 0
 #define TEMP_SENSOR_6 0
 #define TEMP_SENSOR_7 0
-#define TEMP_SENSOR_BED 14  //解决热床表面温度和显示温度相差>5°的问题。
+#define TEMP_SENSOR_BED 14  // Solve the problem of >5° difference between the surface temperature of the hot bed and the displayed temperature.
 #define TEMP_SENSOR_PROBE 0
 #define TEMP_SENSOR_CHAMBER 0
 #define TEMP_SENSOR_COOLER 0
@@ -888,15 +890,15 @@
 #if ENABLED(HIGH_SPEED_1)
 // #define DEFAULT_MAX_ACCELERATION      { 3000, 3000, 100, 3000 }
 #define DEFAULT_MAX_ACCELERATION      { 4000, 4000, 4000, 4000 }
-#else 
+#else
 #define DEFAULT_MAX_ACCELERATION      { 3000, 3000, 100, 3000 }
 // #define DEFAULT_MAX_ACCELERATION      { 1500, 1500, 100, 1500 }
 #endif
 #define LIMITED_MAX_ACCEL_EDITING     // Limit edit via M201 or LCD to DEFAULT_MAX_ACCELERATION * 2
 #if ENABLED(LIMITED_MAX_ACCEL_EDITING)
-#if ENABLED(HIGH_SPEED_1) 
+#if ENABLED(HIGH_SPEED_1)
     #define MAX_ACCEL_EDIT_VALUES       { 8000, 8000, 200, 8000 } // ...or, set your own edit limits
-  #else 
+  #else
    #define MAX_ACCEL_EDIT_VALUES       { 3000, 3000, 100, 3000 } // ...or, set your own edit limits
   #endif
 #endif
@@ -932,15 +934,15 @@
 // #define CLASSIC_JERK
 #if ENABLED(CLASSIC_JERK)
 #if ENABLED(HIGH_SPEED_1)
- #define DEFAULT_XJERK  12.0  //解决边角庞大问题 8--》12
+ #define DEFAULT_XJERK  12.0  // Solving the problem of bulky corners 8-->12
   #define DEFAULT_YJERK 12.0
   #define DEFAULT_ZJERK 0.8
-  
+
 #else
-  #define DEFAULT_XJERK 5.0  
+  #define DEFAULT_XJERK 5.0
   #define DEFAULT_YJERK 5.0
   #define DEFAULT_ZJERK 0.4
-  
+
 #endif
 
   //#define TRAVEL_EXTRA_XYJERK 0.0     // Additional jerk allowance for all travel moves
@@ -1149,13 +1151,13 @@
 #else  //精灵挤出机传功比
   #define NOZZLE_TO_PROBE_OFFSET { -24.25, -15, 0 }  //prime 2023.05.28 朱工提供
 #endif
-   
-#else 
+
+#else
  #define NOZZLE_TO_PROBE_OFFSET { -31.75, -14.69, 0}  //prime 2023.02.10 朱工提供
 #endif
 // Most probes should stay away from the edges of the bed, but
 // with NOZZLE_AS_PROBE this can be negative for a wider probing area.
-#define PROBING_MARGIN 3 
+#define PROBING_MARGIN 3
 
 // X and Y axis travel speed (mm/min) between probes
 #define XY_PROBE_FEEDRATE (160*60)//(80*60)
@@ -1341,29 +1343,29 @@
 
 #define XY_BED_MIN_ZERO 0
 // Travel limits (mm) after homing, corresponding to endstop positions.
-#if ENABLED(PLATFORM_OFFSET)  //需要平台偏移
-  // #define X_MIN_POS -10//-4        // +向左偏移 -向右偏移
-  // #define Y_MIN_POS -22       //平台向前移动 rock_20220927  - 向前，+向后 2.5
-  
-  #if ENABLED(WUHAN_CHENGE_PLATFORM)  //武汉改结构
-    #define X_MIN_POS    -13    //平台向左移动
+#if ENABLED(PLATFORM_OFFSET)  // Requires platform offset
+  // #define X_MIN_POS -10//-4        // + Offset to the left - Offset to the right
+  // #define Y_MIN_POS -22       // Platform forward - forward, + backward 2.5
+
+  #if ENABLED(WUHAN_CHENGE_PLATFORM)  // Structural changes in Wuhan
+    #define X_MIN_POS    -13    // The platform moves to the left
     #define  Y_MIN_POS   -15
-  #else 
-    #define X_MIN_POS -11    //平台向左移动 
-    #define  Y_MIN_POS   -18 //平台向前移动 rock_20220927
+  #else
+    #define X_MIN_POS -11    // The platform moves to the left
+    #define  Y_MIN_POS   -18 // The platform moves forward
   #endif
 #else   //
 #define X_MIN_POS -4
 #define Y_MIN_POS -17
 #endif
 #define Z_MIN_POS 0
-#if ENABLED(WUHAN_CHENGE_PLATFORM)  //武汉改结构
+#if ENABLED(WUHAN_CHENGE_PLATFORM)  // Structural changes in Wuhan
   #define X_MAX_POS X_BED_SIZE
 #else
   #define X_MAX_POS X_BED_SIZE + 5
 #endif
 #define Y_MAX_POS Y_BED_SIZE + 7
-#define Z_MAX_POS 250  //由于切片软件没有限制250mm的高度，因此临时加高5mm  Rock——20230105  
+#define Z_MAX_POS 250  // Temporary height increase of 5mm as the slicing software does not limit the height to 250mm
 
 /**
  * Software Endstops

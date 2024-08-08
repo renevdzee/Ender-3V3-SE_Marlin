@@ -946,7 +946,7 @@
       #define SHAPING_FREQ_Y  40//41.38    // (Hz) The default dominant resonant frequency on the Y axis.
       #define SHAPING_ZETA_Y  0.15f    // Damping ratio of the Y axis (range: 0.0 = no damping to 1.0 = critical damping).
     #endif
-    
+
     // #define SHAPING_MIN_FREQ  20        // By default the minimum of the shaping frequencies. Override to affect SRAM usage.
     // #define SHAPING_MAX_STEPRATE 10000  // By default the maximum total step rate of the shaped axes. Override to affect SRAM usage.
     //#define SHAPING_MENU          // Add a menu to the LCD to set shaping parameters.
@@ -1893,7 +1893,7 @@
   #define AUTOZ_TOOL_Y    28//35 + Y_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the Y direction of the nozzle is mm
   #else
    #define AUTOZ_TOOL_X   31 + X_MIN_POS               // The distance between the center of the AUTOZ tool sensing area and the X direction of the nozzle is mm
-  #define AUTOZ_TOOL_Y    35 + Y_MIN_POS 
+  #define AUTOZ_TOOL_Y    35 + Y_MIN_POS
   #endif
   #define AUTOZ_TOOL_Z    -5
   #define TOOL_BRUSH_X    -5                           // The x-direction difference between the center of the induction area and the center of the brush
@@ -1973,7 +1973,7 @@
 
   #if ENABLED(WUHAN_CHENGE_PLATFORM)  //武汉改结构
     #define PROBING_MARGIN_BACK  PROBING_MARGIN+10
-  #else  
+  #else
     #define PROBING_MARGIN_BACK  PROBING_MARGIN
   #endif
 #endif
@@ -2658,11 +2658,11 @@
     #define Z4_RSENSE       0.15
     #define Z4_CHAIN_POS    -1
     //#define Z4_INTERPOLATE true
-    #define Z4_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define Z4_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E0)
-    #define E0_CURRENT       600 //陈承轩——解决E轴电机温度过高的问题——20230220
+    #define E0_CURRENT       600 // Chen Chengxuan - Solve the problem of high temperature of E-axis motor
     #define E0_MICROSTEPS    16  //
     #define E0_RSENSE        0.15
     #define E0_CHAIN_POS     -1
@@ -2676,7 +2676,7 @@
     #define E1_RSENSE       0.15
     #define E1_CHAIN_POS    -1
     //#define E1_INTERPOLATE true
-    #define E1_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E1_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E2)
@@ -2685,7 +2685,7 @@
     #define E2_RSENSE         0.15
     #define E2_CHAIN_POS     -1
     //#define E2_INTERPOLATE true
-    #define E2_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E2_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E3)
@@ -2694,7 +2694,7 @@
     #define E3_RSENSE         0.11
     #define E3_CHAIN_POS     -1
     //#define E3_INTERPOLATE true
-    #define E3_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E3_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E4)
@@ -2703,7 +2703,7 @@
     #define E4_RSENSE        0.11
     #define E4_CHAIN_POS     -1
     //#define E4_INTERPOLATE true
-    #define E4_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E4_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E5)
@@ -2712,7 +2712,7 @@
     #define E5_RSENSE         0.11
     #define E5_CHAIN_POS     -1
     //#define E5_INTERPOLATE true
-    #define E5_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E5_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E6)
@@ -2721,7 +2721,7 @@
     #define E6_RSENSE         0.11
     #define E6_CHAIN_POS     -1
     //#define E6_INTERPOLATE true
-    #define E6_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E6_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   #if AXIS_IS_TMC(E7)
@@ -2730,7 +2730,7 @@
     #define E7_RSENSE         0.11
     #define E7_CHAIN_POS     -1
     //#define E7_INTERPOLATE true
-    #define E7_HOLD_MULTIPLIER HOLD_MULTIPLIER 
+    #define E7_HOLD_MULTIPLIER HOLD_MULTIPLIER
   #endif
 
   /**
@@ -2788,7 +2788,7 @@
   //#define Z2_SLAVE_ADDRESS 0
   //#define Z3_SLAVE_ADDRESS 0
   //#define Z4_SLAVE_ADDRESS 0
-  
+
   //#define E1_SLAVE_ADDRESS 0
   //#define E2_SLAVE_ADDRESS 0
   //#define E3_SLAVE_ADDRESS 0
