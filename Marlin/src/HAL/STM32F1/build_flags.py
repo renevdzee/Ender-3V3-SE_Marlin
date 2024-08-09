@@ -1,12 +1,14 @@
 from __future__ import print_function
 import sys
 
+# Removed -mcpu and -mthumb because they are set by platformio/framework
+# so can also be used for stm32f3 cortex-m4 (needs platformio-build-stm32f3.py)
+# also, LINKFLAGS below does nothing ...
+
 #dynamic build flags for generic compile options
 if __name__ == "__main__":
   args = " ".join([ "-std=gnu++14",
                     "-Os",
-                    "-mcpu=cortex-m3",
-                    "-mthumb",
 
                     "-fsigned-char",
                     "-fno-move-loop-invariants",
@@ -43,9 +45,7 @@ else:
       ],
       LINKFLAGS=[
           "-Os",
-          "-mcpu=cortex-m3",
           "-ffreestanding",
-          "-mthumb",
           "--specs=nano.specs",
           "--specs=nosys.specs",
           "-u_printf_float",

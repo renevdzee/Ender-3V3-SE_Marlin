@@ -139,7 +139,8 @@
 
 // Choose the name from boards.h that matches your setup
 #ifndef MOTHERBOARD
-  #define MOTHERBOARD BOARD_CREALITY_V3_GD303
+  //#define MOTHERBOARD BOARD_CREALITY_V3_GD303
+  #define MOTHERBOARD BOARD_CREALITY_CR4NS   // GD32F303RET6 Cortex-M4 build
 #endif
 
 // Name displayed in the LCD "Ready" message and Info menu

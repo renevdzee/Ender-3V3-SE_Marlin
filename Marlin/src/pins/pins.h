@@ -567,8 +567,10 @@
 #elif MB(MINGDA_MPX_ARM_MINI)
   #include "stm32f1/pins_MINGDA_MPX_ARM_MINI.h" // STM32F1                                env:STM32F103RE
 #elif MB(CREALITY_V3_GD303)
-#include "stm32f1/pins_CREALITY_V3_GD303.h"   // STM32F1                                env:STM32F103RET6_creality
- 
+  #include "stm32f1/pins_CREALITY_V3_GD303.h"   // STM32F1                                env:STM32F103RET6_creality
+#elif MB(CREALITY_CR4NS)
+  #include "stm32f1/pins_CREALITY_V3_GD303.h"   // STM32F3                                env:STM32F303RET6_creality
+
 
 //
 // ARM Cortex-M4F

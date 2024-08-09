@@ -348,6 +348,11 @@
 #define BOARD_CREALITY_V3_GD303       4050  // Creality GD303 (STM32F103RE)
 
 //
+// STM32F3/GD32F3 ARM Cortex-M4F
+//
+#define BOARD_CREALITY_CR4NS          5300  // Creality CR4NS200320C13 (GD32F303RET6) as found in the Ender-3 V3 SE
+
+//
 // ARM Cortex-M4F
 //
 
